@@ -1,5 +1,4 @@
-# Neuroballad: A Neural Circuit Simulation Library
-
+# Neuroballad: <small>A Neural Circuit Simulation Library</small>
 ## Introduction
 Neuroballad is a high level API for simulation of biological neural networks on GPU's, built to facilitate development of circuit-level implementations. Written in Python and on top of [Neurokernel](https://github.com/neurokernel/neurokernel)/[Neurodriver](https://github.com/neurokernel/neurodriver), Neuroballad focuses on user experience and attempts to minimize the time required to execute a desired circuit design.
 
@@ -47,7 +46,7 @@ C.add([1, 3, 5], AlphaSynapse())
 # Join the nodes together, using an edge list notation
 # (i.e. [0,1] implies a directed edge from node 0 to node 1)
 C.join([[0,1],[1,2],[2,3],[3,4],[4,5],[5,0]])
-# Create a current input for node 0 from t=0.20s to t=0.40s with an amplitude of 40mA.
+# Create a current input for node 0 from t=0.25s to t=0.50s with an amplitude of 40mA.
 C_in_a = InIStep(0, 40., 0.20, 0.40)
 # Create inputs, similarly, for nodes 2 and 4.
 C_in_b = InIStep(2, 40., 0.40, 0.60)
@@ -55,4 +54,4 @@ C_in_c = InIStep(4, 40., 0.60, 0.80)
 # Use the three inputs and simulate the circuit for a second, in 1e-4s time steps.
 C.sim(1., 1e-4, [C_in_a, C_in_b, C_in_c])
 ```
-Neuroballad includes a number of additional methods for easily dealing with larger systems, the details of which you can find in the documentation.
+Neuroballad includes a number of additional methods for easily dealing with larger systems, the details of which you can find in the upcoming sections.
