@@ -369,7 +369,7 @@ class HodgkinHuxley(object):
         if node_name == "":
             node_name = 'HodgkinHuxley' + str(i)
         G.add_node(name, **{'class': 'HodgkinHuxley',
-         'name': node_name, 'n_state': self.n, 'm': self.m,
+         'name': node_name, 'm': self.m,
          'h': self.h})
         attrs = {name: {'n': self.n}}
         nx.set_node_attributes(G, attrs)
@@ -386,7 +386,7 @@ class ConnorStevens(object):
     def nadd(self, G, i):
         name = 'uid' + str(i)
         G.add_node(name, **{'class': 'ConnorStevens',
-         'name': 'ConnorStevens' + str(i), 'n_state': self.n, 'm': self.m,
+         'name': 'ConnorStevens' + str(i), 'm': self.m,
          'h': self.h, 'a': self.a, 'b': self.b})
         attrs = {name: {'n': self.n}}
         nx.set_node_attributes(G, attrs)
@@ -552,7 +552,7 @@ class Activator(object):
         name = 'uid' + str(i)
         G.add_node(name, **{'class': 'Activator',
          'name': 'Activator' + str(i), 'beta': self.beta,
-         'K': self.K, 'n_state': self.n,
+         'K': self.K,
          'circuit': 'local' })
         attrs = {name: {'n': self.n}}
         nx.set_node_attributes(G, attrs)
@@ -569,7 +569,7 @@ class Repressor(object):
         name = 'uid' + str(i)
         G.add_node(name, **{'class': 'Repressor',
          'name': 'Repressor' + str(i), 'beta': self.beta,
-         'K': self.K, 'n_state': self.n,
+         'K': self.K,
          'circuit': 'local' })
         attrs = {name: {'n': self.n}}
         nx.set_node_attributes(G, attrs)
@@ -718,7 +718,6 @@ class AuditoryTransducer(object):
          'K_ho': self.K_ho,
          'K_gs': self.K_gs,
          'K_aj': self.K_aj,
-         'n_state': self.N,
          'D': self.D,
          'delta_G': self.delta_G,
          'k_b': self.k_b,
