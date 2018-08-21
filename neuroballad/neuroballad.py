@@ -229,7 +229,7 @@ class Circuit(object):
         uids = []
         for i in in_list:
             uids.append('uid' + str(i.node_id))
-        uids = np.array(list(set(uids)))
+        uids = np.array(list(set(uids)), dtype = 'S')
         I = np.zeros((Nt, len(uids)), dtype=np.float64)
         file_name = 'neuroballad_temp_model_input.h5'
         for i in in_list:
@@ -369,8 +369,10 @@ class HodgkinHuxley(object):
         if node_name == "":
             node_name = 'HodgkinHuxley' + str(i)
         G.add_node(name, **{'class': 'HodgkinHuxley',
-         'name': node_name, 'n': self.n, 'm': self.m,
+         'name': node_name, 'n_state': self.n, 'm': self.m,
          'h': self.h})
+        attrs = {name: {'n': self.n}}
+        nx.set_node_attributes(G, attrs)
         return G
 
 class ConnorStevens(object):
@@ -384,8 +386,10 @@ class ConnorStevens(object):
     def nadd(self, G, i):
         name = 'uid' + str(i)
         G.add_node(name, **{'class': 'ConnorStevens',
-         'name': 'ConnorStevens' + str(i), 'n': self.n, 'm': self.m,
+         'name': 'ConnorStevens' + str(i), 'n_state': self.n, 'm': self.m,
          'h': self.h, 'a': self.a, 'b': self.b})
+        attrs = {name: {'n': self.n}}
+        nx.set_node_attributes(G, attrs)
         return G
 
 class LeakyIAF(object):
@@ -548,8 +552,10 @@ class Activator(object):
         name = 'uid' + str(i)
         G.add_node(name, **{'class': 'Activator',
          'name': 'Activator' + str(i), 'beta': self.beta,
-         'K': self.K, 'n': self.n,
+         'K': self.K, 'n_state': self.n,
          'circuit': 'local' })
+        attrs = {name: {'n': self.n}}
+        nx.set_node_attributes(G, attrs)
         return G
 
 class Repressor(object):
@@ -563,8 +569,10 @@ class Repressor(object):
         name = 'uid' + str(i)
         G.add_node(name, **{'class': 'Repressor',
          'name': 'Repressor' + str(i), 'beta': self.beta,
-         'K': self.K, 'n': self.n,
+         'K': self.K, 'n_state': self.n,
          'circuit': 'local' })
+        attrs = {name: {'n': self.n}}
+        nx.set_node_attributes(G, attrs)
         return G
 
 class Integrator(object):
@@ -710,7 +718,7 @@ class AuditoryTransducer(object):
          'K_ho': self.K_ho,
          'K_gs': self.K_gs,
          'K_aj': self.K_aj,
-         'N': self.N,
+         'n_state': self.N,
          'D': self.D,
          'delta_G': self.delta_G,
          'k_b': self.k_b,
@@ -722,6 +730,8 @@ class AuditoryTransducer(object):
          'lambda_a': self.lambda_a,
          'P_zero_rest': self.P_zero_rest,
          'circuit': 'local' })
+        attrs = {name: {'n': self.n}}
+        nx.set_node_attributes(G, attrs)
         return G
 
 class OutPort(object):
