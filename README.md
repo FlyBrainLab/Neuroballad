@@ -29,7 +29,7 @@ python setup.py develop
 Finally, install Neuroballad:
 ``` shell
 cd ~
-git clone https://github.com/mkturkcan/neuroballad
+git clone https://github.com/FlyBrainLab/neuroballad
 cd ~/neuroballad
 python setup.py develop
 ```
