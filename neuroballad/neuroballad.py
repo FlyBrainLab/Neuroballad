@@ -777,8 +777,9 @@ class InIBoxcar(object):
     def add(self, uids, I, t):
         step_range = [self.t_start, self.t_end]
         step_intensity = self.I_val
+        uids = [i.decode("utf-8") for i in uids]
         I[np.logical_and(t>step_range[0], t<step_range[1]),
-        np.where(uids == ('uid' + str(self.node_id)))] += step_intensity
+        np.where([i == ('uid' + str(self.node_id)) for i in uids])] += step_intensity
         return I
     def addToExperiment(self):
         return self.params
@@ -806,8 +807,9 @@ class InIGaussianNoise(object):
         self.params = a
     def add(self, uids, I, t):
         step_range = [self.t_start, self.t_end]
+        uids = [i.decode("utf-8") for i in uids]
         I[np.logical_and(t>step_range[0], t<step_range[1]),
-        np.where(uids == ('uid' + str(self.node_id)))] += self.mean + self.std*\
+        np.where([i == ('uid' + str(self.node_id)) for i in uids])] += self.mean + self.std*\
         np.array(np.random.randn(len(np.where(np.logical_and(t>step_range[0], \
         t<step_range[1])))))
         return I
@@ -844,6 +846,7 @@ class InISinusoidal(object):
         self.params = a
     def add(self, uids, I, t):
         step_range = [self.t_start, self.t_end]
+        uids = [i.decode("utf-8") for i in uids]
         sin_wave = np.sin(2 * np.pi * t * (self.frequency + self.frequency_sweep * np.sin(2 * np.pi * t * self.frequency_sweep_frequency)) + self.shift)
         values_to_add = self.mean + self.amplitude * \
                 sin_wave[np.logical_and(t>step_range[0], t<step_range[1])]
@@ -851,7 +854,7 @@ class InISinusoidal(object):
             values_to_add[values_to_add>self.threshold_value] = np.max(values_to_add)
             values_to_add[values_to_add<=self.threshold_value] = np.min(values_to_add)
         I[np.logical_and(t>step_range[0], t<step_range[1]),
-        np.where(uids == ('uid' + str(self.node_id)))] += values_to_add
+        np.where([i == ('uid' + str(self.node_id)) for i in uids])] += values_to_add
         return I
     def addToExperiment(self):
         return self.params
