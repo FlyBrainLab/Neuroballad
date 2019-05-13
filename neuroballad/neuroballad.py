@@ -320,13 +320,13 @@ class Circuit(object):
         }
         #G = nx.read_gexf('neuroballad_temp_model.gexf.gz')
         G = self.G
-        G.remove_nodes_from(nx.isolates(G))
+        # G.remove_nodes_from(nx.isolates(G))
         mapping = {}
         node_types = set()
-        for n,d in G.nodes_iter(data=True):
+        for n,d in G.nodes(data=True):
             node_types.add( d['name'].rstrip('1234567890') )
         node_nos = dict.fromkeys(node_types, 1)
-        for n,d in G.nodes_iter(data=True):
+        for n,d in G.nodes(data=True):
             node_type = d['name'].rstrip('1234567890')
             mapping[n] = d['name'].rstrip('1234567890') + str(node_nos[node_type])
             node_nos[node_type] += 1
