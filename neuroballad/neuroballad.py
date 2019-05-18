@@ -283,16 +283,32 @@ class Circuit(object):
         uids = []
         for i in in_list:
             uids.append('uid' + str(i.node_id))
+        input_vars = []
+        for i in in_list:
+            input_vars.append(i.var)
+        input_vars = list(set(input_vars))
         uids = np.array(list(set(uids)), dtype = 'S')
-        I = np.zeros((Nt, len(uids)), dtype=np.float64)
+        Is = {}
+        Inodes = {}
+        for i in input_vars:
+            Inodes[i] = []
+        for i in in_list:
+            Inodes[i.var].append('uid' + str(i.node_id))
+        for i in input_vars:
+            Inodes[i] = np.array(list(set(Inodes[i])), dtype = 'S')
+        for i in input_vars:
+            Is[i] = np.zeros((Nt, len(Inodes[i])), dtype=np.float64)
+        # I = np.zeros((Nt, len(uids)), dtype=np.float64)
         file_name = 'neuroballad_temp_model_input.h5'
         for i in in_list:
-            I = i.add(uids, I, t)
+            Is[i.var] = i.add(Inodes[i.var], Is[i.var], t)
         with h5py.File(file_name, 'w') as f:
-            f.create_dataset('I/uids', data=uids)
-            f.create_dataset('I/data', (Nt, len(uids)),
-                             dtype=np.float64,
-                             data=I)
+            for i in input_vars:
+                print(i + '/uids')
+                f.create_dataset(i + '/uids', data=Inodes[i])
+                f.create_dataset(i + '/data', (Nt, len(Inodes[i])),
+                                dtype=np.float64,
+                                data=Is[i])
         if os.path.isfile('neuroballad_execute.py'):
             subprocess.call(['python','neuroballad_execute.py'])
         else:
@@ -816,11 +832,12 @@ class InPort(object):
 
 class InIBoxcar(object):
     ElementClass = 'input'
-    def __init__(self, node_id, I_val, t_start, t_end):
+    def __init__(self, node_id, I_val, t_start, t_end, var = 'I'):
         self.node_id = node_id
         self.I_val = I_val
         self.t_start = t_start
         self.t_end = t_end
+        self.var = var
         a = {}
         a['name'] = 'InIBoxcar'
         a['node_id'] = node_id
@@ -840,17 +857,18 @@ class InIBoxcar(object):
 
 class InIStep(InIBoxcar):
     ElementClass = 'input'
-    def __init__(self, node_id, I_val, t_start, t_end):
-        InIBoxcar.__init__(self, node_id, I_val, t_start, t_end)
+    def __init__(self, node_id, I_val, t_start, t_end, var = 'I'):
+        InIBoxcar.__init__(self, node_id, I_val, t_start, t_end, var = var)
 
 class InIGaussianNoise(object):
     ElementClass = 'input'
-    def __init__(self, node_id, mean, std, t_start, t_end):
+    def __init__(self, node_id, mean, std, t_start, t_end, var='I'):
         self.node_id = node_id
         self.mean = mean
         self.std = std
         self.t_start = t_start
         self.t_end = t_end
+        self.var = var
         a = {}
         a['name'] = 'InIGaussianNoise'
         a['node_id'] = node_id
@@ -872,7 +890,19 @@ class InIGaussianNoise(object):
 
 class InISinusoidal(object):
     ElementClass = 'input'
-    def __init__(self, node_id, amplitude, frequency, t_start, t_end, mean = 0, shift = 0., frequency_sweep = 0.0, frequency_sweep_frequency = 1.0, threshold_active = 0, threshold_value = 0.0):
+    def __init__(self, 
+                 node_id, 
+                 amplitude, 
+                 frequency, 
+                 t_start, 
+                 t_end, 
+                 mean = 0, 
+                 shift = 0., 
+                 frequency_sweep = 0.0, 
+                 frequency_sweep_frequency = 1.0, 
+                 threshold_active = 0, 
+                 threshold_value = 0.0,
+                 var = 'I'):
         self.node_id = node_id
         self.amplitude = amplitude
         self.frequency = frequency
@@ -884,6 +914,7 @@ class InISinusoidal(object):
         self.threshold_value = threshold_value
         self.frequency_sweep_frequency = frequency_sweep_frequency
         self.frequency_sweep = frequency_sweep
+        self.var = var
         a = {}
         a['name'] = 'InISinusoidal'
         a['node_id'] = node_id
