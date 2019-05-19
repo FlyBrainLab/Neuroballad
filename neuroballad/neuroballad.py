@@ -261,7 +261,7 @@ class Circuit(object):
         >>> C.save(file_name = 'my_circuit.gexf.gz')
         """
         nx.write_gexf(self.G, file_name)
-    def sim(self, t_duration, t_step, in_list = None):
+    def sim(self, t_duration, t_step, in_list = None, record = ['V', 'spike_state', 'I']):
         """
         Simulates the circuit for a set amount of time, with a fixed temporal
         step size and a list of inputs.
@@ -309,6 +309,12 @@ class Circuit(object):
                 f.create_dataset(i + '/data', (Nt, len(Inodes[i])),
                                 dtype=np.float64,
                                 data=Is[i])
+        recorders = []
+        for i in record:
+            recorders.append((i,None))
+        with open('record_parameters.pickle', 'wb') as f:
+            pickle.dump(recorders, f, protocol=pickle.HIGHEST_PROTOCOL)
+        print(recorders)
         if os.path.isfile('neuroballad_execute.py'):
             subprocess.call(['python','neuroballad_execute.py'])
         else:
@@ -328,7 +334,7 @@ class Circuit(object):
         self.V = vis.visualizer()
         self.V.add_LPU('neuroballad_temp_model_output.h5',
                   gexf_file = 'neuroballad_temp_model.gexf.gz',LPU = 'lpu')
-        print([self.V._uids['lpu']['V']])
+        # print([self.V._uids['lpu']['V']])
     def visualize_video(self, name, config = {}, visualization_variable = 'V',
                         out_name = 'test.avi'):
         """

@@ -16,6 +16,8 @@ def main():
     (comp_dict, conns) = LPU.lpu_parser('neuroballad_temp_model.gexf.gz')
     with open('run_parameters.pickle', 'rb') as f:
         run_parameters = pickle.load(f)
+    with open('record_parameters.pickle', 'rb') as f:
+        record_parameters = pickle.load(f)
     dur = 1.0
     dt = 1e-4
     dur = run_parameters[0]
@@ -23,7 +25,7 @@ def main():
     fl_input_processor = FileInputProcessor('neuroballad_temp_model_input.h5')
 
     from neurokernel.LPU.OutputProcessors.FileOutputProcessor import FileOutputProcessor
-    output_processor = FileOutputProcessor([('V',None),('spike_state',None),('I',None)], 'neuroballad_temp_model_output.h5', sample_interval=1)
+    output_processor = FileOutputProcessor(record_parameters, 'neuroballad_temp_model_output.h5', sample_interval=1)
 
     #Parse extra arguments
     parser = argparse.ArgumentParser()
