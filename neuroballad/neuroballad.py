@@ -7,6 +7,7 @@ workflow.
 
 from __future__ import absolute_import
 import os
+import copy
 import h5py
 import random
 import pickle
@@ -58,6 +59,19 @@ def NeuroballadModelGenerator(model_name, arg_names):
 class BaseNeuroballadModel(object):
     def __init__(self, my_type):
         self._type = my_type
+
+def merge_circuits(X, Y):
+    XY = nx.compose(X, Y)
+    return XY
+
+def circuit_to_experiment(G, experiment_name):
+    Gc = copy.deepcopy(G)
+    mapping = {}
+    for i in G.nodes():
+        mapping[i] = '{}_{}'.format(mapping[i], experiment_name)
+    Gc = nx.relabel_nodes(Gc, mapping)
+    return Gc
+
         
 def populate_models():
     from importlib import import_module
@@ -99,6 +113,16 @@ class Circuit(object):
     >>> C_in_c = InIStep(4, 40., 0.75, 0.50) #Create current input for node 4
     >>> C.sim(1., 1e-4, [C_in_a, C_in_b, C_in_c]) #Use the inputs and simulate
     """
+    default_tags = {'species': 'None',
+                'hemisphere': 'None',
+                'neuropil': 'None',
+                'circuit': 'None',
+                'from': 'None',
+                'to': 'None',
+                'neurotransmitter': 'None',
+                'experiment_id': 'None',
+                'rid': 'None',
+                'type': 'neuron'}
     def __init__(self, name = ''):
         self.G = nx.MultiDiGraph() #Neurokernel graph definition
         self.results = {} #Simulation results
@@ -109,8 +133,21 @@ class Circuit(object):
         self.inputs = []
         self.outputs = []
         self.experimentConfig = []
+        self.experiment_name = ''
         self.ICs = []
         self.name = name
+
+    def tags_to_json(self, tags):
+        """
+        Turns the tags dictionary to a JSON string.
+        """
+        return json.dumps(tags)
+
+    def json_to_tags(self, tags_str):
+        """
+        Turns a tags JSON string to the dictionary.
+        """
+        return json.loads(tags_str)
 
     def add(self, name, neuron):
         """
@@ -128,7 +165,7 @@ class Circuit(object):
                 if (i in self.ids):
                     raise ValueError('Don''t use the same ID for multiple neurons!')
             for i in name:
-                self.G = neuron.nadd(self.G, i)
+                self.G = neuron.nadd(self.G, i, self.experiment_name)
                 self.ids.append(i)
     def get_new_id(self):
         """
@@ -314,7 +351,6 @@ class Circuit(object):
             recorders.append((i,None))
         with open('record_parameters.pickle', 'wb') as f:
             pickle.dump(recorders, f, protocol=pickle.HIGHEST_PROTOCOL)
-        print(recorders)
         if os.path.isfile('neuroballad_execute.py'):
             subprocess.call(['python','neuroballad_execute.py'])
         else:
@@ -431,409 +467,132 @@ class Circuit(object):
 
 ### Component Definitions
 
-class HodgkinHuxley(object):
-    ElementClass = 'neuron'
-    def __init__(self, name = "", n = 0.5, m = 0.5, h = 0.5, initV = -60.0):
-        self.n = n
-        self.m = m
-        self.h = h
-        self.initV = initV
-        self.name = name
-    def nadd(self, G, i):
-        name = 'uid' + str(i)
-        node_name = self.name
-        if node_name == "":
-            node_name = 'HodgkinHuxley' + str(i)
-        G.add_node(name, **{'class': 'HodgkinHuxley',
-         'name': node_name, 'm': self.m,
-         'h': self.h})
-        attrs = {name: {'n': self.n}}
+class Element(object):
+    ElementClass = 'None'
+    states = {}
+    params = {}
+    
+    def __init__(self, name = "", **kwargs):
+        self.space = {'name': name}
+        self.space.update(self.states)
+        self.space.update(self.params)
+        if 'initV' in self.space and 'threshold' in self.space:
+            initV = self.space['initV']
+            threshold = self.space['threshold']
+            if initV > threshold:
+                self.space['initV'] = np.random.uniform(self.space['reset_potential'], self.space['threshold'])
+            else:
+                self.space['initV'] = initV
+        self.space['class'] = self.__class__.__name__
+        
+    def nadd(self, G, i, experiment_name):
+        name = 'uid' + str(i) + '_' + experiment_name
+        self.space['name'] = name
+        space = copy.deepcopy(self.space)
+        G.add_node(name, **space)
+        del space['n']
+        attrs = {name: {'n': self.space['n']}}
         nx.set_node_attributes(G, attrs)
         return G
 
-class ConnorStevens(object):
+
+class HodgkinHuxley(Element):
     ElementClass = 'neuron'
-    def __init__(self, name = "", n = 0.0, m = 0.0, h = 1.0, a = 0., b = 0.):
-        self.n = n
-        self.m = m
-        self.h = h
-        self.a = a
-        self.b = b
-    def nadd(self, G, i):
-        name = 'uid' + str(i)
-        G.add_node(name, **{'class': 'ConnorStevens',
-         'name': 'ConnorStevens' + str(i), 'm': self.m,
-         'h': self.h, 'a': self.a, 'b': self.b})
-        attrs = {name: {'n': self.n}}
-        nx.set_node_attributes(G, attrs)
-        return G
+    states = {'n': 0., 'm': 0., 'h': 1.0}
+    params = {}
 
-class LeakyIAF(object):
+class ConnorStevens(Element):
     ElementClass = 'neuron'
-    def __init__(self, name = "", resting_potential = -67.5489770451,
-                 reset_potential = -67.5489770451, threshold = -25.1355161007,
-                 capacitance = 0.0669810502993,
-                 resistance = 1002.445570216,
-                 initV = 10001.):
-        self.resting_potential = (resting_potential)
-        self.reset_potential = (reset_potential)
-        self.threshold = (threshold)
-        self.capacitance = (capacitance)
-        self.resistance = (resistance)
-        self.name = name
-        if initV > threshold:
-            self.initV = np.random.uniform(reset_potential, threshold)
-        else:
-            self.initV = initV
+    states = {'n': 0., 'm': 0., 'h': 1.0, 'a': 0., 'b': 0.}
+    params = {}
 
-    def nadd(self, G, i):
-        name = 'uid' + str(i)
-        G.add_node(name, **{'class': 'LeakyIAF', 'name': 'LeakyIAF' + str(i),
-         'resting_potential': self.resting_potential, 'initV': self.initV,
-         'reset_potential': self.reset_potential, 'threshold': self.threshold,
-         'capacitance': self.capacitance, 'resistance': self.resistance})
-        return G
-
-class DopamineLeakyIAF(object):
+class LeakyIAF(Element):
     ElementClass = 'neuron'
-    def __init__(self, name = "", resting_potential = -67.5489770451,
-                 reset_potential = -67.5489770451, threshold = -25.1355161007,
-                 capacitance = 0.0669810502993,
-                 resistance = 1002.445570216,
-                 initV = 10001.):
-        self.resting_potential = (resting_potential)
-        self.reset_potential = (reset_potential)
-        self.threshold = (threshold)
-        self.capacitance = (capacitance)
-        self.resistance = (resistance)
-        self.name = name
-        if initV > threshold:
-            self.initV = np.random.uniform(-60.0,-25.0)
-        else:
-            self.initV = initV
-    def nadd(self, G, i):
-        name = 'uid' + str(i)
-        G.add_node(name, **{'class': 'DopamineLeakyIAF',
-         'name': 'DopamineLeakyIAF' + str(i),
-         'resting_potential': self.resting_potential, 'initV': self.initV,
-         'reset_potential': self.reset_potential, 'threshold': self.threshold,
-         'capacitance': self.capacitance, 'resistance': self.resistance})
-        return G
+    states = {'initV': 10001.}
+    params = {'resting_potential': 0., 
+              'reset_potential': 0., 
+              'threshold': 1.0, 
+              'capacitance': 0., 
+              'resistance': 0.}
 
-class AlphaSynapse(object):
+class AlphaSynapse(Element):
     ElementClass = 'synapse'
-    def __init__(self, name = "", ar = 1.1*1e2, ad = 1.9*1e3, reverse = 65.0,
-                 gmax = 3*1e-6):
-        self.ar = ar
-        self.ad = ad
-        self.reverse = reverse
-        self.gmax = gmax
-        self.name = name
-    def nadd(self, G, i):
-        name = 'uid' + str(i)
-        G.add_node(name, **{'class': 'AlphaSynapse',
-         'name': 'AlphaSynapse' + str(i), 'ar': self.ar, 'ad': self.ad,
-         'reverse': self.reverse, 'gmax': self.gmax, 'circuit': 'local' })
-        return G
+    states = {}
+    params = {'ar': 1.1*1e2, 
+              'ad': 1.9*1e3, 
+              'reverse': 65.0, 
+              'gmax': 3*1e-6}
 
-class DopamineAlphaSynapse(object):
+class PowerGPotGPot(Element):
     ElementClass = 'synapse'
-    def __init__(self, name = "", ar = 1.1*1e2, ad = 1.9*1e3, reverse = 65.0,
-                 gmax = 3*1e-6):
-        self.ar = ar
-        self.ad = ad
-        self.reverse = reverse
-        self.gmax = gmax
-        self.name = name
-    def nadd(self, G, i):
-        name = 'uid' + str(i)
-        G.add_node(name, **{'class': 'DopamineAlphaSynapse',
-         'name': 'DopamineAlphaSynapse' + str(i), 'ar': self.ar, 'ad': self.ad,
-         'reverse': self.reverse, 'gmax': self.gmax, 'circuit': 'local' })
-        return G
+    states = {}
+    params = {'power': 1.0, 
+              'slope': 0.02, 
+              'saturation': 0.4, 
+              'threshold': -55.0, 
+              'reverse': 0.0, 
+              'gmax': 0.4}
 
-class PowerGPotGPot(object):
+class MorrisLecar(Element):
     ElementClass = 'synapse'
-    def __init__(self, name = "", gmax = 0.4, threshold = -55.0, slope = 0.02,
-                 power = 1.0, saturation = 0.4, reverse = 0.0):
-        self.gmax = gmax
-        self.threshold = float(threshold)
-        self.slope = slope
-        self.power = power
-        self.saturation = saturation
-        self.reverse = reverse
-    def nadd(self, G, i):
-        name = 'uid' + str(i)
-        G.add_node(name, **{'class': 'PowerGPotGPot',
-         'name': 'PowerGPotGPot' + str(i), 'gmax': self.gmax,
-         'threshold': self.threshold, 'slope': self.slope, 'power': self.power,
-         'saturation': self.saturation, 'reverse': self.reverse })
-        return G
+    states = {'V1': -20.,
+              'V2': 50.,
+              'V3': -40.,
+              'V4': 20.0,
+              'initV': -46.080,
+              'initn': 0.3525}
+    params = {'phi': 0.4,
+              'offset': 0., 
+              'V_L': -40., 
+              'V_Ca': 120., 
+              'V_K': -80., 
+              'g_L': 3., 
+              'g_Ca': 4., 
+              'g_K': 16.}
 
-class MorrisLecar(object):
-    ElementClass = 'neuron'
-    def __init__(self, name = "", V1 = -20., V2 = 50.0, V3 = -40.,
-                 V4 = 20.0, phi = 0.4, offset= 0., V_L = -40., V_Ca = 120.,
-                 V_K = -80., g_L = 3., g_Ca = 4., g_K = 16., initV = -46.080,
-                 initn = 0.3525):
-        self.V1 = V1
-        self.V2 = V2
-        self.V3 = V3
-        self.V4 = V4
-        self.phi = phi
-        self.offset = offset
-        self.V_L = V_L
-        self.V_Ca = V_Ca
-        self.V_K = V_K
-        self.g_L = g_L
-        self.g_Ca = g_Ca
-        self.g_K = g_K
-        self.initV = initV
-        self.initn = initn
-    def nadd(self, G, i):
-        name = 'uid' + str(i)
-        G.add_node(name, **{'class': 'MorrisLecar',
-         'name': 'MorrisLecar' + str(i), 'V1': self.V1, 'V2': self.V2,
-         'V3': self.V3, 'V4': self.V4, 'phi': self.phi, 'offset': self.offset,
-         'V_L': self.V_L, 'V_Ca': self.V_Ca, 'V_K': self.V_K, 'g_L': self.g_L,
-         'g_Ca': self.g_Ca, 'g_K': self.g_K, 'initV': self.initV,
-         'initn': self.initn})
-        return G
-
-class DopamineModulatedAlphaSynapse(object):
-    ElementClass = 'synapse'
-    def __init__(self, name = "", ar = 1.1*1e2, ad = 1.9*1e3, reverse = 65.0,
-                 gmax = 3*1e-6):
-        self.ar = ar
-        self.ad = ad
-        self.reverse = reverse
-        self.gmax = gmax
-        self.name = name
-    def nadd(self, G, i):
-        name = 'uid' + str(i)
-        G.add_node(name, **{'class': 'DopamineModulatedAlphaSynapse',
-         'name': 'DopamineModulatedAlphaSynapse' + str(i), 'ar': self.ar,
-         'ad': self.ad, 'reverse': self.reverse, 'gmax': self.gmax,
-         'circuit': 'local' })
-        return G
-
-class Activator(object):
+class Activator(Element):
     ElementClass = 'abstract'
-    def __init__(self, name = "", beta = 1.0, K = 1.0, n = 1.0):
-        self.beta = beta
-        self.K = K
-        self.n = n
-        self.name = name
-    def nadd(self, G, i):
-        name = 'uid' + str(i)
-        G.add_node(name, **{'class': 'Activator',
-         'name': 'Activator' + str(i), 'beta': self.beta,
-         'K': self.K,
-         'circuit': 'local' })
-        attrs = {name: {'n': self.n}}
-        nx.set_node_attributes(G, attrs)
-        return G
+    states = {}
+    params = {'beta': 1.0, 
+              'K': 1.0, 
+              'n': 1.0}
 
-class Repressor(object):
+class Repressor(Element):
     ElementClass = 'abstract'
-    def __init__(self, name = "", beta = 1.0, K = 1.0, n = 1.0):
-        self.beta = beta
-        self.K = K
-        self.n = n
-        self.name = name
-    def nadd(self, G, i):
-        name = 'uid' + str(i)
-        G.add_node(name, **{'class': 'Repressor',
-         'name': 'Repressor' + str(i), 'beta': self.beta,
-         'K': self.K,
-         'circuit': 'local' })
-        attrs = {name: {'n': self.n}}
-        nx.set_node_attributes(G, attrs)
-        return G
+    states = {}
+    params = {'beta': 1.0, 
+              'K': 1.0, 
+              'n': 1.0}
 
-class Integrator(object):
+class Integrator(Element):
     ElementClass = 'abstract'
-    def __init__(self, name = "", gamma = 0.0):
-        self.gamma = gamma
-        self.name = name
-    def nadd(self, G, i):
-        name = 'uid' + str(i)
-        G.add_node(name, **{'class': 'Integrator',
-         'name': 'Integrator' + str(i), 'gamma': self.gamma,
-         'circuit': 'local' })
-        return G
+    states = {}
+    params = {'gamma': 0.0}
 
-class CurrentModulator(object):
+class CurrentModulator(Element):
     ElementClass = 'abstract'
-    def __init__(self, name = "", A = 1.0, shift = 0.0):
-        self.A = A
-        self.shift = shift
-        self.name = name
-    def nadd(self, G, i):
-        name = 'uid' + str(i)
-        G.add_node(name, **{'class': 'CurrentModulator',
-         'name': 'CurrentModulator' + str(i), 'A': self.A, 'shift': self.shift,
-         'circuit': 'local' })
-        return G
+    states = {}
+    params = {'A': 1.0,
+              'shift': 0.0}
 
-class Threshold(object):
-    ElementClass = 'abstract'
-    def __init__(self, name = "", threshold_value = 1.0, threshold_mode = 0.0):
-        self.threshold_value = threshold_value
-        self.threshold_mode = threshold_mode
-        self.name = name
-    def nadd(self, G, i):
-        name = 'uid' + str(i)
-        G.add_node(name, **{'class': 'Threshold',
-         'name': 'Threshold' + str(i),
-         'threshold_value': self.threshold_value,
-         'threshold_mode': self.threshold_mode,
-         'circuit': 'local' })
-        return G
-
-class Segev(object):
-    ElementClass = 'neuron'
-    def __init__(self, name = "", C = 0.0669810502993, R = 1002.445570216, V_leak = 1.0):
-        self.C = C
-        self.R = R
-        self.V_leak = V_leak
-        self.name = name
-    def nadd(self, G, i):
-        name = 'uid' + str(i)
-        G.add_node(name, **{'class': 'Segev',
-         'name': 'Segev' + str(i),
-         'C': self.C,
-         'R': self.R,
-         'V_leak': self.V_leak,
-         'circuit': 'local' })
-        return G
-
-class Chemical(object):
-    ElementClass = 'synapse'
-    def __init__(self, name = "",  reverse = 65.0, g_max = 6. * (10. ** -1.), K = -4.3944, V_eq = -24.0, V_range = 36.0):
-        self.g_max = g_max
-        self.K = K
-        self.V_eq = V_eq
-        self.V_range = V_range
-        self.reverse = reverse
-        self.name = name
-    def nadd(self, G, i):
-        name = 'uid' + str(i)
-        G.add_node(name, **{'class': 'Chemical',
-         'name': 'Chemical' + str(i),
-         'g_max': self.g_max,
-         'K': self.K,
-         'V_eq': self.V_eq,
-         'V_range': self.V_range,
-         'reverse': self.reverse,
-         'circuit': 'local' })
-        return G
-
-class Resistor(object):
-    ElementClass = 'abstract'
-    def __init__(self, name = "", R = 1.0):
-        self.R = R
-        self.name = name
-    def nadd(self, G, i):
-        name = 'uid' + str(i)
-        G.add_node(name, **{'class': 'Resistor',
-         'name': 'Resistor' + str(i),
-         'R': self.R,
-         'circuit': 'local' })
-        return G
-
-class Aggregator(object):
-    ElementClass = 'abstract'
-    def __init__(self, name = ""):
-        self.name = name
-    def nadd(self, G, i):
-        name = 'uid' + str(i)
-        G.add_node(name, **{'class': 'Aggregator',
-         'name': 'Aggregator' + str(i),
-         'circuit': 'local' })
-        return G
-
-class AuditoryTransducer(object):
-    ElementClass = 'abstract'
-    def __init__(self, name = "",
-                 M = 1.0,
-                 K_ho = 1.0,
-                 K_gs = 1.0,
-                 K_aj = 1.0,
-                 N = 1.0,
-                 D = 1.0,
-                 delta_G = 1.0,
-                 k_b = 1.0,
-                 T = 1.0,
-                 delta = 1.0,
-                 S = 1.0,
-                 F_max = 1.0,
-                 lambd = 1.0,
-                 lambda_a = 1.0,
-                 P_zero_rest = 0.5):
-        self.M = M
-        self.K_ho = K_ho
-        self.K_gs = K_gs
-        self.K_aj = K_aj
-        self.N = N
-        self.D = D
-        self.delta_G = delta_G
-        self.k_b = k_b
-        self.T = T
-        self.delta = delta
-        self.S = S
-        self.F_max = F_max
-        self.lambd = lambd
-        self.lambda_a = lambda_a
-        self.P_zero_rest = P_zero_rest
-    def nadd(self, G, i):
-        name = 'uid' + str(i)
-        G.add_node(name, **{'class': 'AuditoryTransducer',
-         'name': 'AuditoryTransducer' + str(i),
-         'M': self.M,
-         'K_ho': self.K_ho,
-         'K_gs': self.K_gs,
-         'K_aj': self.K_aj,
-         'D': self.D,
-         'delta_G': self.delta_G,
-         'k_b': self.k_b,
-         'T': self.T,
-         'delta': self.delta,
-         'S': self.S,
-         'F_max': self.F_max,
-         'lambda': self.lambd,
-         'lambda_a': self.lambda_a,
-         'P_zero_rest': self.P_zero_rest,
-         'circuit': 'local' })
-        attrs = {name: {'n': self.n}}
-        nx.set_node_attributes(G, attrs)
-        return G
-
-class OutPort(object):
+class OutPort(Element):
     ElementClass = 'port'
-    def __init__(self, name = "", port_type = 'gpot', lpu = 'lpu'):
-        self.port_type = port_type
-        self.lpu = lpu
-        self.name = name
-    def nadd(self, G, i):
-        name = 'uid' + str(i)
-        G.add_node(name, **{'class': 'Port', 'name': 'Port' + str(i),
-         'port_type': self.port_type, 'port_io': 'out',
-         'selector': '/%s/out/%s/%s' % (self.lpu, self.port_type, str(i))})
-        return G
+    states = {}
+    params = {'port_type': 'gpot',
+              'class': 'Port',
+              'port_io': 'out',
+              'lpu': 'lpu',
+              'selector': '/%s/out/%s/%s' % ('lpu', 'gpot', str(i))}
 
-class InPort(object):
+class InPort(Element):
     ElementClass = 'port'
-    def __init__(self, name = "", port_type = 'spike', lpu = 'lpu'):
-        self.port_type = port_type
-        self.lpu = lpu
-        self.name = name
-    def nadd(self, G, i):
-        name = 'uid' + str(i)
-        G.add_node(name, **{'class': 'Port', 'name': 'Port' + str(i),
-         'port_type': self.port_type, 'port_io': 'in',
-         'selector': '/%s/in/%s/%s' % (self.lpu, self.port_type, str(i))})
-        return G
+    states = {}
+    params = {'port_type': 'spike',
+              'class': 'Port',
+              'port_io': 'in',
+              'lpu': 'lpu',
+              'selector': '/%s/in/%s/%s' % ('lpu', 'gpot', str(i))}
+
 ### Input Processors
 
 class InIBoxcar(object):
