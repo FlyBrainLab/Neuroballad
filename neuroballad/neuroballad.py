@@ -21,6 +21,8 @@ import matplotlib as mpl
 import networkx as nx
 from networkx.drawing.nx_agraph import graphviz_layout
 from shutil import copyfile
+import json
+
 mpl.use('agg')
 
 class NeuroballadExecutor(object):
@@ -123,7 +125,7 @@ class Circuit(object):
                 'experiment_id': 'None',
                 'rid': 'None',
                 'type': 'neuron'}
-    def __init__(self, name = ''):
+    def __init__(self, name = '', default_type = np.float64, experiment_name = ''):
         self.G = nx.MultiDiGraph() #Neurokernel graph definition
         self.results = {} #Simulation results
         self.ids = [] #Graph ID's
@@ -133,7 +135,8 @@ class Circuit(object):
         self.inputs = []
         self.outputs = []
         self.experimentConfig = []
-        self.experiment_name = ''
+        self.experiment_name = experiment_name
+        self.default_type = default_type
         self.ICs = []
         self.name = name
 
@@ -148,6 +151,11 @@ class Circuit(object):
         Turns a tags JSON string to the dictionary.
         """
         return json.loads(tags_str)
+
+    def encode_name(self, i):
+        name_dict = {'name': str(i), 'experiment_name': self.experiment_name}
+        name = self.tags_to_json(name_dict)
+        return name
 
     def add(self, name, neuron):
         """
@@ -165,8 +173,8 @@ class Circuit(object):
                 if (i in self.ids):
                     raise ValueError('Don''t use the same ID for multiple neurons!')
             for i in name:
-                self.G = neuron.nadd(self.G, i, self.experiment_name)
-                self.ids.append(i)
+                neuron.nadd(self, i, self.experiment_name)
+                self.ids.append(str(i))
     def get_new_id(self):
         """
         Densely connects two arrays of circuit ID's.
@@ -176,9 +184,9 @@ class Circuit(object):
         >>> C.dense_connect_via(cluster_a, cluster_b)
         """
         if self.ids == []:
-            return 0
+            return '0'
         else:
-            return int(np.max(self.ids)+1)
+            return str(len(self.ids)+1)
         #return next(filter(set(self.ids).__contains__, \
         #            itertools.count(0)))
     def add_cluster(self, number, neuron):
@@ -193,7 +201,7 @@ class Circuit(object):
         cluster_inds = []
         for i in range(number):
             i_toadd = self.get_new_id()
-            self.G = neuron.nadd(self.G, i_toadd)
+            neuron.nadd(self, i_toadd)
             self.ids.append(i_toadd)
             cluster_inds.append(i_toadd)
         return cluster_inds
@@ -212,7 +220,7 @@ class Circuit(object):
                 i_toadd = self.get_new_id()
                 if debug==1:
                     print('Added neuron ID: ' + str(i_toadd))
-                self.G = neuron.nadd(self.G, i_toadd)
+                neuron.nadd(self, i_toadd)
                 self.ids.append(i_toadd)
                 self.join([[i, i_toadd], [i_toadd, j]], delay = delay, via=via, tag = tag)
     def dense_connect(self, in_array_a, in_array_b, delay = 0.0):
@@ -242,7 +250,7 @@ class Circuit(object):
                 self.join([[i, in_array_c[k]], [in_array_c[k], j]]
                           , delay = delay)
                 k += 1
-    def join(self, in_array, delay = 0.0, via = '', tag = 0):
+    def join(self, in_array, delay = 0.0, via = None, tag = 0):
         """
         Processes an edge list and adds the edges to the circuit.
 
@@ -255,13 +263,17 @@ class Circuit(object):
         in_array = np.array(in_array)
         #print(in_array)
         for i in range(in_array.shape[0]):
-            if via == '':
-                self.G.add_edge('uid' + str(in_array[i,0]),
-                                'uid' + str(in_array[i,1]), delay = delay, tag = tag)
+            if via is None:
+                self.G.add_edge(self.encode_name(str(in_array[i,0])),
+                                self.encode_name(str(in_array[i,1])), 
+                                delay = delay, 
+                                tag = tag)
             else:
-                self.G.add_edge('uid' + str(in_array[i,0]),
-                                'uid' + str(in_array[i,1]), delay = delay,
-                                via = via, tag = tag)
+                self.G.add_edge(self.encode_name(str(in_array[i,0])),
+                                self.encode_name(str(in_array[i,1])), 
+                                delay = delay,
+                                via = via, 
+                                tag = tag)
     def fit(self, inputs):
         """
         Attempts to find parameters to fit a certain curve to the output.
@@ -288,7 +300,7 @@ class Circuit(object):
         self.G = nx.read_gexf()
         self.ids = []
         for i in self.G.nodes():
-            self.ids.append(int(i[3:]))
+            self.ids.append(i)
     def save(self, file_name = 'neuroballad_temp_model.gexf.gz'):
         """
         Saves the current circuit to a file.
@@ -298,7 +310,7 @@ class Circuit(object):
         >>> C.save(file_name = 'my_circuit.gexf.gz')
         """
         nx.write_gexf(self.G, file_name)
-    def sim(self, t_duration, t_step, in_list = None, record = ['V', 'spike_state', 'I']):
+    def sim(self, t_duration, t_step, in_list = None, record = ['V', 'spike_state', 'I'], preamble = []):
         """
         Simulates the circuit for a set amount of time, with a fixed temporal
         step size and a list of inputs.
@@ -319,7 +331,7 @@ class Circuit(object):
         t  = np.arange(0, t_step*Nt, t_step)
         uids = []
         for i in in_list:
-            uids.append('uid' + str(i.node_id))
+            uids.append(str(i.node_id))
         input_vars = []
         for i in in_list:
             input_vars.append(i.var)
@@ -330,33 +342,44 @@ class Circuit(object):
         for i in input_vars:
             Inodes[i] = []
         for i in in_list:
-            Inodes[i.var].append('uid' + str(i.node_id))
+            Inodes[i.var].append(str(i.node_id))
         for i in input_vars:
             Inodes[i] = np.array(list(set(Inodes[i])), dtype = 'S')
         for i in input_vars:
-            Is[i] = np.zeros((Nt, len(Inodes[i])), dtype=np.float64)
-        # I = np.zeros((Nt, len(uids)), dtype=np.float64)
+            Is[i] = np.zeros((Nt, len(Inodes[i])), dtype = self.default_type)
+
+
+
+
         file_name = 'neuroballad_temp_model_input.h5'
         for i in in_list:
-            Is[i.var] = i.add(Inodes[i.var], Is[i.var], t)
+            Is[i.var] = i.add(self, Inodes[i.var], Is[i.var], t)
+
+
+        print(Inodes)
         with h5py.File(file_name, 'w') as f:
             for i in input_vars:
                 print(i + '/uids')
-                f.create_dataset(i + '/uids', data=Inodes[i])
+                i_nodes = Inodes[i]
+                try:
+                    i_nodes = [i.decode('ascii') for i in i_nodes]
+                except:
+                    pass
+                i_nodes = [self.encode_name(i) for i in i_nodes]
+                i_nodes = np.array(i_nodes, dtype = 'S')
+                f.create_dataset(i + '/uids', data=i_nodes)
                 f.create_dataset(i + '/data', (Nt, len(Inodes[i])),
-                                dtype=np.float64,
-                                data=Is[i])
+                                dtype = self.default_type,
+                                data = Is[i])
         recorders = []
         for i in record:
             recorders.append((i,None))
         with open('record_parameters.pickle', 'wb') as f:
             pickle.dump(recorders, f, protocol=pickle.HIGHEST_PROTOCOL)
-        if os.path.isfile('neuroballad_execute.py'):
-            subprocess.call(['python','neuroballad_execute.py'])
-        else:
+        if not os.path.isfile('neuroballad_execute.py'):
             copyfile(get_neuroballad_path() + '/neuroballad_execute.py',\
                      'neuroballad_execute.py')
-            subprocess.call(['python','neuroballad_execute.py'])
+        subprocess.call(preamble + ['python','neuroballad_execute.py'])
     def collect_results(self):
         """
         Collects the latest results from the executor. Useful when loading
@@ -386,8 +409,7 @@ class Circuit(object):
             config = {'variable': visualization_variable, 'type': 'waveform',
                       'uids': [self.V._uids['lpu'][visualization_variable]]}
         for i in name:
-            print(i)
-            uids.append('uid' + str(i))
+            uids.append(i)
         config['uids'] = uids
         self.V.codec = 'mpeg4'
         self.V.add_plot(config, 'lpu')
@@ -395,7 +417,6 @@ class Circuit(object):
         self.V.out_filename = out_name
         self.V.run()
     def visualize_circuit(self, prog = 'dot' , splines = 'line'):
-        print(self.ids)
         styles = {
             'graph': {
                 'label': self.name,
@@ -467,6 +488,8 @@ class Circuit(object):
 
 ### Component Definitions
 
+
+
 class Element(object):
     ElementClass = 'None'
     states = {}
@@ -485,15 +508,20 @@ class Element(object):
                 self.space['initV'] = initV
         self.space['class'] = self.__class__.__name__
         
-    def nadd(self, G, i, experiment_name):
-        name = 'uid' + str(i) + '_' + experiment_name
+    def nadd(self, C, i, experiment_name):
+        # name_dict = {'name': i, 'experiment_name': experiment_name}
+        # name = tags_to_json(name_dict)
+        name = C.encode_name(i)
         self.space['name'] = name
+        if 'selector' in self.space:
+            self.space['selector'] += str(i)
         space = copy.deepcopy(self.space)
-        G.add_node(name, **space)
-        del space['n']
-        attrs = {name: {'n': self.space['n']}}
-        nx.set_node_attributes(G, attrs)
-        return G
+        C.G.add_node(name, **space)
+        if 'n' in space:
+            del space['n']
+            attrs = {name: {'n': self.space['n']}}
+            nx.set_node_attributes(C.G, attrs)
+        return C.G
 
 
 class HodgkinHuxley(Element):
@@ -582,7 +610,7 @@ class OutPort(Element):
               'class': 'Port',
               'port_io': 'out',
               'lpu': 'lpu',
-              'selector': '/%s/out/%s/%s' % ('lpu', 'gpot', str(i))}
+              'selector': '/%s/out/%s/' % ('lpu', 'gpot')}
 
 class InPort(Element):
     ElementClass = 'port'
@@ -591,9 +619,42 @@ class InPort(Element):
               'class': 'Port',
               'port_io': 'in',
               'lpu': 'lpu',
-              'selector': '/%s/in/%s/%s' % ('lpu', 'gpot', str(i))}
+              'selector': '/%s/in/%s/' % ('lpu', 'gpot')}
 
 ### Input Processors
+
+class Element(object):
+    ElementClass = 'None'
+    states = {}
+    params = {}
+    
+    def __init__(self, name = "", **kwargs):
+        self.space = {'name': name}
+        self.space.update(self.states)
+        self.space.update(self.params)
+        if 'initV' in self.space and 'threshold' in self.space:
+            initV = self.space['initV']
+            threshold = self.space['threshold']
+            if initV > threshold:
+                self.space['initV'] = np.random.uniform(self.space['reset_potential'], self.space['threshold'])
+            else:
+                self.space['initV'] = initV
+        self.space['class'] = self.__class__.__name__
+        
+    def nadd(self, C, i, experiment_name):
+        # name_dict = {'name': i, 'experiment_name': experiment_name}
+        # name = tags_to_json(name_dict)
+        name = C.encode_name(i)
+        self.space['name'] = name
+        if 'selector' in self.space:
+            self.space['selector'] += str(i)
+        space = copy.deepcopy(self.space)
+        C.G.add_node(name, **space)
+        if 'n' in space:
+            del space['n']
+            attrs = {name: {'n': self.space['n']}}
+            nx.set_node_attributes(C.G, attrs)
+        return C.G
 
 class InIBoxcar(object):
     ElementClass = 'input'
@@ -610,12 +671,19 @@ class InIBoxcar(object):
         a['t_start'] = t_start
         a['t_end'] = t_end
         self.params = a
-    def add(self, uids, I, t):
+    def add(self, C, uids, I, t):
+        print(uids)
+        try:
+            uids = [i.decode('ascii') for i in uids]
+        except:
+            pass
+        uids = [C.encode_name(i) for i in uids]
         step_range = [self.t_start, self.t_end]
         step_intensity = self.I_val
-        uids = [i.decode("utf-8") for i in uids]
+
+        print(uids)
         I[np.logical_and(t>step_range[0], t<step_range[1]),
-        np.where([i == ('uid' + str(self.node_id)) for i in uids])] += step_intensity
+        np.where([i == (C.encode_name(str(self.node_id))) for i in uids])] += step_intensity
         return I
     def addToExperiment(self):
         return self.params
