@@ -65,15 +65,6 @@ class BaseNeuroballadModel(object):
 def merge_circuits(X, Y):
     XY = nx.compose(X, Y)
     return XY
-
-def circuit_to_experiment(G, experiment_name):
-    Gc = copy.deepcopy(G)
-    mapping = {}
-    for i in G.nodes():
-        mapping[i] = '{}_{}'.format(mapping[i], experiment_name)
-    Gc = nx.relabel_nodes(Gc, mapping)
-    return Gc
-
         
 def populate_models():
     from importlib import import_module
@@ -140,6 +131,30 @@ class Circuit(object):
         self.ICs = []
         self.name = name
 
+
+    def set_experiment(self, experiment_name):
+        self.experiment_name = experiment_name
+        Gc = copy.deepcopy(self.G)
+        mapping = {}
+        for i in self.G.nodes():
+            ii = self.json_to_tags(i)
+            ii['experiment_name'] = experiment_name
+            mapping[i] = self.tags_to_json(ii)
+        Gc = nx.relabel_nodes(Gc, mapping)
+        self.G = Gc
+        for i, val in self.G.nodes(data=True):
+            val['name'] = i
+        for i in range(len(self.ids)):
+            self.ids[i][1] = experiment_name
+
+    def copy(self):
+        return copy.deepcopy(self)
+
+    def merge(self, C):
+        self.G = merge_circuits(self.G, C.G)
+        self.ids += C.ids
+
+
     def tags_to_json(self, tags):
         """
         Turns the tags dictionary to a JSON string.
@@ -152,8 +167,15 @@ class Circuit(object):
         """
         return json.loads(tags_str)
 
-    def encode_name(self, i):
-        name_dict = {'name': str(i), 'experiment_name': self.experiment_name}
+    def encode_name(self, i, experiment_name = None):
+        i = str(i)
+        try:
+            i = i.decode('ascii')
+        except:
+            pass
+        if experiment_name is None:
+            experiment_name = self.experiment_name
+        name_dict = {'name': str(i), 'experiment_name': experiment_name}
         name = self.tags_to_json(name_dict)
         return name
 
@@ -173,8 +195,8 @@ class Circuit(object):
                 if (i in self.ids):
                     raise ValueError('Don''t use the same ID for multiple neurons!')
             for i in name:
-                neuron.nadd(self, i, self.experiment_name)
-                self.ids.append(str(i))
+                neuron.nadd(self, i, self.experiment_name, self.default_tags)
+                self.ids.append([str(i), self.experiment_name])
     def get_new_id(self):
         """
         Densely connects two arrays of circuit ID's.
@@ -280,15 +302,6 @@ class Circuit(object):
         Not implemented at this time.
         """
         pass
-    def compile(self, model_output_name = 'neuroballad_temp_model.gexf.gz'):
-        """
-        Writes the current circuit to a file.
-
-        Example
-        --------
-        >>> C.compile(model_output_name = 'example_circuit.gexf.gz')
-        """
-        nx.write_gexf(self.G, model_output_name)
     def load_last(self, file_name = 'neuroballad_temp_model.gexf.gz'):
         """
         Loads the latest executed circuit in the directory.
@@ -297,10 +310,10 @@ class Circuit(object):
         --------
         >>> C.load_last()
         """
-        self.G = nx.read_gexf()
+        self.G = nx.read_gexf('neuroballad_temp_model.gexf.gz')
         self.ids = []
         for i in self.G.nodes():
-            self.ids.append(i)
+            self.ids.append(i) # FIX
     def save(self, file_name = 'neuroballad_temp_model.gexf.gz'):
         """
         Saves the current circuit to a file.
@@ -310,15 +323,8 @@ class Circuit(object):
         >>> C.save(file_name = 'my_circuit.gexf.gz')
         """
         nx.write_gexf(self.G, file_name)
-    def sim(self, t_duration, t_step, in_list = None, record = ['V', 'spike_state', 'I'], preamble = []):
-        """
-        Simulates the circuit for a set amount of time, with a fixed temporal
-        step size and a list of inputs.
 
-        Example
-        --------
-        >>> C.sim(1., 1e-4, InIStep(0, 10., 1., 2.))
-        """
+    def compile(self, t_duration, t_step, in_list = None, record = ['V', 'spike_state', 'I']):
         self.t_duration = t_duration
         self.t_step = t_step
         if in_list is None:
@@ -331,7 +337,7 @@ class Circuit(object):
         t  = np.arange(0, t_step*Nt, t_step)
         uids = []
         for i in in_list:
-            uids.append(str(i.node_id))
+            uids.append(self.encode_name(str(i.node_id), experiment_name=i.experiment_name))
         input_vars = []
         for i in in_list:
             input_vars.append(i.var)
@@ -342,30 +348,32 @@ class Circuit(object):
         for i in input_vars:
             Inodes[i] = []
         for i in in_list:
-            Inodes[i.var].append(str(i.node_id))
+            in_name = self.encode_name(str(i.node_id), experiment_name=i.experiment_name)
+            if in_name in list(self.G.nodes(data=False)):
+                pass
+            else:
+                print('Not found in node names.')
+            Inodes[i.var].append(self.encode_name(str(i.node_id), experiment_name=i.experiment_name))
         for i in input_vars:
             Inodes[i] = np.array(list(set(Inodes[i])), dtype = 'S')
         for i in input_vars:
             Is[i] = np.zeros((Nt, len(Inodes[i])), dtype = self.default_type)
 
-
-
-
         file_name = 'neuroballad_temp_model_input.h5'
         for i in in_list:
             Is[i.var] = i.add(self, Inodes[i.var], Is[i.var], t)
 
-
-        print(Inodes)
         with h5py.File(file_name, 'w') as f:
             for i in input_vars:
-                print(i + '/uids')
+                # print(i + '/uids')
                 i_nodes = Inodes[i]
+                """
                 try:
                     i_nodes = [i.decode('ascii') for i in i_nodes]
                 except:
                     pass
                 i_nodes = [self.encode_name(i) for i in i_nodes]
+                """
                 i_nodes = np.array(i_nodes, dtype = 'S')
                 f.create_dataset(i + '/uids', data=i_nodes)
                 f.create_dataset(i + '/data', (Nt, len(Inodes[i])),
@@ -376,6 +384,16 @@ class Circuit(object):
             recorders.append((i,None))
         with open('record_parameters.pickle', 'wb') as f:
             pickle.dump(recorders, f, protocol=pickle.HIGHEST_PROTOCOL)
+    def sim(self, t_duration, t_step, in_list = None, record = ['V', 'spike_state', 'I'], preamble = []):
+        """
+        Simulates the circuit for a set amount of time, with a fixed temporal
+        step size and a list of inputs.
+
+        Example
+        --------
+        >>> C.sim(1., 1e-4, InIStep(0, 10., 1., 2.))
+        """
+        self.compile(t_duration, t_step, in_list, record)
         if not os.path.isfile('neuroballad_execute.py'):
             copyfile(get_neuroballad_path() + '/neuroballad_execute.py',\
                      'neuroballad_execute.py')
@@ -508,11 +526,14 @@ class Element(object):
                 self.space['initV'] = initV
         self.space['class'] = self.__class__.__name__
         
-    def nadd(self, C, i, experiment_name):
+    def nadd(self, C, i, experiment_name, default_tags):
         # name_dict = {'name': i, 'experiment_name': experiment_name}
         # name = tags_to_json(name_dict)
         name = C.encode_name(i)
         self.space['name'] = name
+        for i in default_tags.keys():
+            if i not in self.space.keys():
+                self.space[i] = default_tags[i]
         if 'selector' in self.space:
             self.space['selector'] += str(i)
         space = copy.deepcopy(self.space)
@@ -623,25 +644,18 @@ class InPort(Element):
 
 ### Input Processors
 
-class Element(object):
-    ElementClass = 'None'
+class Input(Element):
+    ElementClass = 'input'
     states = {}
     params = {}
-    
-    def __init__(self, name = "", **kwargs):
+
+    def __init__(self, name = "", experiment_name='', **kwargs):
+        self.experiment_name = experiment_name
         self.space = {'name': name}
         self.space.update(self.states)
         self.space.update(self.params)
-        if 'initV' in self.space and 'threshold' in self.space:
-            initV = self.space['initV']
-            threshold = self.space['threshold']
-            if initV > threshold:
-                self.space['initV'] = np.random.uniform(self.space['reset_potential'], self.space['threshold'])
-            else:
-                self.space['initV'] = initV
-        self.space['class'] = self.__class__.__name__
-        
-    def nadd(self, C, i, experiment_name):
+    
+    def add(self, C, uids, I, t):
         # name_dict = {'name': i, 'experiment_name': experiment_name}
         # name = tags_to_json(name_dict)
         name = C.encode_name(i)
@@ -655,10 +669,13 @@ class Element(object):
             attrs = {name: {'n': self.space['n']}}
             nx.set_node_attributes(C.G, attrs)
         return C.G
+    def addToExperiment(self):
+        return self.params
 
-class InIBoxcar(object):
+class InIBoxcar(Input):
     ElementClass = 'input'
-    def __init__(self, node_id, I_val, t_start, t_end, var = 'I'):
+    def __init__(self, node_id, I_val, t_start, t_end, var = 'I', experiment_name=''):
+        self.experiment_name = experiment_name
         self.node_id = node_id
         self.I_val = I_val
         self.t_start = t_start
@@ -672,28 +689,22 @@ class InIBoxcar(object):
         a['t_end'] = t_end
         self.params = a
     def add(self, C, uids, I, t):
-        print(uids)
         try:
             uids = [i.decode('ascii') for i in uids]
         except:
             pass
-        uids = [C.encode_name(i) for i in uids]
         step_range = [self.t_start, self.t_end]
         step_intensity = self.I_val
-
-        print(uids)
         I[np.logical_and(t>step_range[0], t<step_range[1]),
-        np.where([i == (C.encode_name(str(self.node_id))) for i in uids])] += step_intensity
+        np.where([i == (C.encode_name(str(self.node_id), experiment_name=self.experiment_name)) for i in uids])] += step_intensity
         return I
     def addToExperiment(self):
         return self.params
 
 class InIStep(InIBoxcar):
     ElementClass = 'input'
-    def __init__(self, node_id, I_val, t_start, t_end, var = 'I'):
-        InIBoxcar.__init__(self, node_id, I_val, t_start, t_end, var = var)
 
-class InIGaussianNoise(object):
+class InIGaussianNoise(Input):
     ElementClass = 'input'
     def __init__(self, node_id, mean, std, t_start, t_end, var='I'):
         self.node_id = node_id
