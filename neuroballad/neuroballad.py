@@ -154,6 +154,33 @@ class Circuit(object):
         self.G = merge_circuits(self.G, C.G)
         self.ids += C.ids
 
+    def find_neurons(self, **tags_tofind):
+        tags_tofind['type'] = 'neuron'
+        return self.filter_nodes_by_tags(tags_tofind)
+
+    def find_synapses(self, **tags_tofind):
+        tags_tofind['type'] = 'synapse'
+        return self.filter_nodes_by_tags(tags_tofind)
+        
+    def find_ports(self, **tags_tofind):
+        tags_tofind['type'] = 'port'
+        return self.filter_nodes_by_tags(tags_tofind)
+        
+    def filter_nodes_by_tags(self, tags_tofind):
+        output = []
+        for i, val in self.G.nodes(data=True):
+            skip = False
+            for j in tags_tofind.keys():
+                if j not in val:
+                    skip = True
+                else:
+                    if tags_tofind[j] in val[j]:
+                        pass
+                    else:
+                        skip = True
+            if skip == False:
+                output.append(i)
+        return output
 
     def tags_to_json(self, tags):
         """
@@ -188,7 +215,7 @@ class Circuit(object):
         --------
         >>> C.add([1, 2, 3], HodgkinHuxley())
         """
-        if neuron.ElementClass == "input":
+        if neuron.element_class == "input":
             self.experimentConfig.append(neuron.addToExperiment)
         else:
             for i in name:
@@ -509,7 +536,7 @@ class Circuit(object):
 
 
 class Element(object):
-    ElementClass = 'None'
+    element_class = 'None'
     states = {}
     params = {}
     
@@ -517,6 +544,8 @@ class Element(object):
         self.space = {'name': name}
         self.space.update(self.states)
         self.space.update(self.params)
+        self.space.update(kwargs)
+        self.space['type'] = self.element_class
         if 'initV' in self.space and 'threshold' in self.space:
             initV = self.space['initV']
             threshold = self.space['threshold']
@@ -546,17 +575,17 @@ class Element(object):
 
 
 class HodgkinHuxley(Element):
-    ElementClass = 'neuron'
+    element_class = 'neuron'
     states = {'n': 0., 'm': 0., 'h': 1.0}
     params = {}
 
 class ConnorStevens(Element):
-    ElementClass = 'neuron'
+    element_class = 'neuron'
     states = {'n': 0., 'm': 0., 'h': 1.0, 'a': 0., 'b': 0.}
     params = {}
 
 class LeakyIAF(Element):
-    ElementClass = 'neuron'
+    element_class = 'neuron'
     states = {'initV': 10001.}
     params = {'resting_potential': 0., 
               'reset_potential': 0., 
@@ -565,7 +594,7 @@ class LeakyIAF(Element):
               'resistance': 0.}
 
 class AlphaSynapse(Element):
-    ElementClass = 'synapse'
+    element_class = 'synapse'
     states = {}
     params = {'ar': 1.1*1e2, 
               'ad': 1.9*1e3, 
@@ -573,7 +602,7 @@ class AlphaSynapse(Element):
               'gmax': 3*1e-6}
 
 class PowerGPotGPot(Element):
-    ElementClass = 'synapse'
+    element_class = 'synapse'
     states = {}
     params = {'power': 1.0, 
               'slope': 0.02, 
@@ -583,7 +612,7 @@ class PowerGPotGPot(Element):
               'gmax': 0.4}
 
 class MorrisLecar(Element):
-    ElementClass = 'synapse'
+    element_class = 'synapse'
     states = {'V1': -20.,
               'V2': 50.,
               'V3': -40.,
@@ -600,32 +629,32 @@ class MorrisLecar(Element):
               'g_K': 16.}
 
 class Activator(Element):
-    ElementClass = 'abstract'
+    element_class = 'abstract'
     states = {}
     params = {'beta': 1.0, 
               'K': 1.0, 
               'n': 1.0}
 
 class Repressor(Element):
-    ElementClass = 'abstract'
+    element_class = 'abstract'
     states = {}
     params = {'beta': 1.0, 
               'K': 1.0, 
               'n': 1.0}
 
 class Integrator(Element):
-    ElementClass = 'abstract'
+    element_class = 'abstract'
     states = {}
     params = {'gamma': 0.0}
 
 class CurrentModulator(Element):
-    ElementClass = 'abstract'
+    element_class = 'abstract'
     states = {}
     params = {'A': 1.0,
               'shift': 0.0}
 
 class OutPort(Element):
-    ElementClass = 'port'
+    element_class = 'port'
     states = {}
     params = {'port_type': 'gpot',
               'class': 'Port',
@@ -634,7 +663,7 @@ class OutPort(Element):
               'selector': '/%s/out/%s/' % ('lpu', 'gpot')}
 
 class InPort(Element):
-    ElementClass = 'port'
+    element_class = 'port'
     states = {}
     params = {'port_type': 'spike',
               'class': 'Port',
@@ -645,7 +674,7 @@ class InPort(Element):
 ### Input Processors
 
 class Input(Element):
-    ElementClass = 'input'
+    element_class = 'input'
     states = {}
     params = {}
 
@@ -673,7 +702,7 @@ class Input(Element):
         return self.params
 
 class InIBoxcar(Input):
-    ElementClass = 'input'
+    element_class = 'input'
     def __init__(self, node_id, I_val, t_start, t_end, var = 'I', experiment_name=''):
         self.experiment_name = experiment_name
         self.node_id = node_id
@@ -702,10 +731,10 @@ class InIBoxcar(Input):
         return self.params
 
 class InIStep(InIBoxcar):
-    ElementClass = 'input'
+    element_class = 'input'
 
 class InIGaussianNoise(Input):
-    ElementClass = 'input'
+    element_class = 'input'
     def __init__(self, node_id, mean, std, t_start, t_end, var='I'):
         self.node_id = node_id
         self.mean = mean
@@ -733,7 +762,7 @@ class InIGaussianNoise(Input):
         return self.params
 
 class InISinusoidal(object):
-    ElementClass = 'input'
+    element_class = 'input'
     def __init__(self, 
                  node_id, 
                  amplitude, 
