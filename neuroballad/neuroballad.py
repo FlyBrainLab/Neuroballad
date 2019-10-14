@@ -9,6 +9,7 @@ from __future__ import absolute_import
 import os
 import copy
 import h5py
+import time
 import random
 import pickle
 import inspect
@@ -367,7 +368,11 @@ class Circuit(object):
             uids.append(self.encode_name(str(i.node_id), experiment_name=i.experiment_name))
         input_vars = []
         for i in in_list:
-            input_vars.append(i.var)
+            if isinstance(i.var, list):
+                for j in i.var:
+                    input_vars.append(j)
+            else:
+                input_vars.append(i.var)
         input_vars = list(set(input_vars))
         uids = np.array(list(set(uids)), dtype = 'S')
         Is = {}
@@ -380,7 +385,11 @@ class Circuit(object):
                 pass
             else:
                 print('Not found in node names.')
-            Inodes[i.var].append(self.encode_name(str(i.node_id), experiment_name=i.experiment_name))
+            if isinstance(i.var, list):
+                for j in i.var:
+                    Inodes[j].append(self.encode_name(str(i.node_id), experiment_name=i.experiment_name))
+            else:
+                Inodes[i.var].append(self.encode_name(str(i.node_id), experiment_name=i.experiment_name))
         for i in input_vars:
             Inodes[i] = np.array(list(set(Inodes[i])), dtype = 'S')
         for i in input_vars:
@@ -388,7 +397,11 @@ class Circuit(object):
 
         file_name = 'neuroballad_temp_model_input.h5'
         for i in in_list:
-            Is[i.var] = i.add(self, Inodes[i.var], Is[i.var], t)
+            if isinstance(i.var, list):
+                for j in i.var:
+                    Is[j] = i.add(self, Inodes[j], Is[j], t, var=j)
+            else:
+                Is[i.var] = i.add(self, Inodes[i.var], Is[i.var], t, var=j)
 
         with h5py.File(file_name, 'w') as f:
             for i in input_vars:
@@ -425,6 +438,21 @@ class Circuit(object):
             copyfile(get_neuroballad_path() + '/neuroballad_execute.py',\
                      'neuroballad_execute.py')
         subprocess.call(preamble + ['python','neuroballad_execute.py'])
+    def collect(self):
+        data = {'in': {}, 'out': {}}
+        uids = {'in': {}, 'out': {}}
+        time.sleep(1.)
+        with h5py.File('neuroballad_temp_model_input.h5', 'r') as f:
+            for k in f.keys():
+                data['in'][k] = f[k]['data']
+                uids['in'][k] = f[k]['uids'].astype(str)
+                
+        with h5py.File('neuroballad_temp_model_output.h5', 'r') as f:
+            for k in f.keys():
+                if k != 'metadata':
+                    data['out'][k] = f[k]['data'][()]
+                    uids['out'][k] = f[k]['uids'][()].astype(str)
+        return uids, data
     def collect_results(self):
         """
         Collects the latest results from the executor. Useful when loading
@@ -684,7 +712,7 @@ class Input(Element):
         self.space.update(self.states)
         self.space.update(self.params)
     
-    def add(self, C, uids, I, t):
+    def add(self, C, uids, I, t, var=None):
         # name_dict = {'name': i, 'experiment_name': experiment_name}
         # name = tags_to_json(name_dict)
         name = C.encode_name(i)
@@ -717,7 +745,7 @@ class InIBoxcar(Input):
         a['t_start'] = t_start
         a['t_end'] = t_end
         self.params = a
-    def add(self, C, uids, I, t):
+    def add(self, C, uids, I, t, var=None):
         try:
             uids = [i.decode('ascii') for i in uids]
         except:
@@ -726,6 +754,30 @@ class InIBoxcar(Input):
         step_intensity = self.I_val
         I[np.logical_and(t>step_range[0], t<step_range[1]),
         np.where([i == (C.encode_name(str(self.node_id), experiment_name=self.experiment_name)) for i in uids])] += step_intensity
+        return I
+    def addToExperiment(self):
+        return self.params
+
+class InArray(Input):
+    element_class = 'input'
+    def __init__(self, node_id, I_vals, experiment_name=''):
+        self.experiment_name = experiment_name
+        self.node_id = node_id
+        self.I_vals = I_vals
+        a = {}
+        a['name'] = 'InArray'
+        a['node_id'] = node_id
+        a['I_vals'] = I_vals
+        self.var = list(I_vals.keys())
+        self.params = a
+    def add(self, C, uids, I, t, var=None):
+        try:
+            uids = [i.decode('ascii') for i in uids]
+        except:
+            pass
+        a = I[:, np.where([i == (C.encode_name(str(self.node_id), experiment_name=self.experiment_name)) for i in uids])]
+        X = self.params['I_vals'][var].reshape(a.shape)
+        I[:, np.where([i == (C.encode_name(str(self.node_id), experiment_name=self.experiment_name)) for i in uids])] += X
         return I
     def addToExperiment(self):
         return self.params
@@ -750,7 +802,7 @@ class InIGaussianNoise(Input):
         a['t_start'] = t_start
         a['t_end'] = t_end
         self.params = a
-    def add(self, uids, I, t):
+    def add(self, uids, I, t, var=None):
         step_range = [self.t_start, self.t_end]
         uids = [i.decode("utf-8") for i in uids]
         I[np.logical_and(t>step_range[0], t<step_range[1]),
@@ -802,7 +854,7 @@ class InISinusoidal(object):
         a['threshold_active'] = threshold_active
         a['threshold_value'] = threshold_value
         self.params = a
-    def add(self, uids, I, t):
+    def add(self, uids, I, t, var=None):
         step_range = [self.t_start, self.t_end]
         uids = [i.decode("utf-8") for i in uids]
         sin_wave = np.sin(2 * np.pi * t * (self.frequency + self.frequency_sweep * np.sin(2 * np.pi * t * self.frequency_sweep_frequency)) + self.shift)
