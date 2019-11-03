@@ -1,10 +1,8 @@
 #!/usr/bin/env python
-
 """
 Neuroballad circuit class and components for simplifying Neurokernel/Neurodriver
 workflow.
 """
-
 from __future__ import absolute_import
 import os
 import copy
@@ -66,7 +64,7 @@ class BaseNeuroballadModel(object):
 def merge_circuits(X, Y):
     XY = nx.compose(X, Y)
     return XY
-        
+
 def populate_models():
     from importlib import import_module
     import neurokernel
@@ -74,7 +72,7 @@ def populate_models():
     import os
     nk_path = inspect.getfile(neurokernel)
     ndcomponents_path = os.path.join(os.path.join(os.path.dirname(nk_path),'LPU'),'NDComponents')
-    comp_types = [f.path for f in os.scandir(ndcomponents_path) if f.is_dir() and 'Models' in os.path.basename(f.path)]    
+    comp_types = [f.path for f in os.scandir(ndcomponents_path) if f.is_dir() and 'Models' in os.path.basename(f.path)]
     for i in comp_types:
         models_path_py = '.'.join(i.split('/')[-4:])
         model_paths = [f.path for f in os.scandir(i) if not f.is_dir() and 'Base' not in os.path.basename(f.path)  and '__init__' not in os.path.basename(f.path)  and '.py' in os.path.basename(f.path)]
@@ -91,7 +89,7 @@ def populate_models():
                 globals()[model_name] = NeuroballadModelGenerator(model_name, params)
             else:
                 print(model_name,'has been already defined in workspace.')
-                
+
 class Circuit(object):
     """
     Create a Neuroballad circuit.
@@ -132,7 +130,6 @@ class Circuit(object):
         self.ICs = []
         self.name = name
 
-
     def set_experiment(self, experiment_name):
         self.experiment_name = experiment_name
         Gc = copy.deepcopy(self.G)
@@ -162,11 +159,11 @@ class Circuit(object):
     def find_synapses(self, **tags_tofind):
         tags_tofind['type'] = 'synapse'
         return self.filter_nodes_by_tags(tags_tofind)
-        
+
     def find_ports(self, **tags_tofind):
         tags_tofind['type'] = 'port'
         return self.filter_nodes_by_tags(tags_tofind)
-        
+
     def filter_nodes_by_tags(self, tags_tofind):
         output = []
         for i, val in self.G.nodes(data=True):
@@ -315,14 +312,14 @@ class Circuit(object):
         for i in range(in_array.shape[0]):
             if via is None:
                 self.G.add_edge(self.encode_name(str(in_array[i,0])),
-                                self.encode_name(str(in_array[i,1])), 
-                                delay = delay, 
+                                self.encode_name(str(in_array[i,1])),
+                                delay = delay,
                                 tag = tag)
             else:
                 self.G.add_edge(self.encode_name(str(in_array[i,0])),
-                                self.encode_name(str(in_array[i,1])), 
+                                self.encode_name(str(in_array[i,1])),
                                 delay = delay,
-                                via = via, 
+                                via = via,
                                 tag = tag)
     def fit(self, inputs):
         """
@@ -362,7 +359,7 @@ class Circuit(object):
             pickle.dump(run_parameters, f, protocol=pickle.HIGHEST_PROTOCOL)
         nx.write_gexf(self.G, 'neuroballad_temp_model.gexf.gz')
         Nt = int(t_duration/t_step)
-        t  = np.arange(0, t_step*Nt, t_step)
+        t = np.arange(0, t_step*Nt, t_step)
         uids = []
         for i in in_list:
             uids.append(self.encode_name(str(i.node_id), experiment_name=i.experiment_name))
@@ -374,26 +371,29 @@ class Circuit(object):
             else:
                 input_vars.append(i.var)
         input_vars = list(set(input_vars))
-        uids = np.array(list(set(uids)), dtype = 'S')
+        uids = np.array(list(set(uids)), dtype='S')
         Is = {}
         Inodes = {}
         for i in input_vars:
             Inodes[i] = []
         for i in in_list:
-            in_name = self.encode_name(str(i.node_id), experiment_name=i.experiment_name)
+            in_name = self.encode_name(str(i.node_id),
+                                       experiment_name=i.experiment_name)
             if in_name in list(self.G.nodes(data=False)):
                 pass
             else:
                 print('Not found in node names.')
             if isinstance(i.var, list):
                 for j in i.var:
-                    Inodes[j].append(self.encode_name(str(i.node_id), experiment_name=i.experiment_name))
+                    Inodes[j].append(self.encode_name(str(i.node_id),
+                                                      experiment_name=i.experiment_name))
             else:
-                Inodes[i.var].append(self.encode_name(str(i.node_id), experiment_name=i.experiment_name))
+                Inodes[i.var].append(self.encode_name(str(i.node_id),
+                                                      experiment_name=i.experiment_name))
         for i in input_vars:
-            Inodes[i] = np.array(list(set(Inodes[i])), dtype = 'S')
+            Inodes[i] = np.array(list(set(Inodes[i])), dtype='S')
         for i in input_vars:
-            Is[i] = np.zeros((Nt, len(Inodes[i])), dtype = self.default_type)
+            Is[i] = np.zeros((Nt, len(Inodes[i])), dtype=self.default_type)
 
         file_name = 'neuroballad_temp_model_input.h5'
         for i in in_list:
@@ -401,7 +401,7 @@ class Circuit(object):
                 for j in i.var:
                     Is[j] = i.add(self, Inodes[j], Is[j], t, var=j)
             else:
-                Is[i.var] = i.add(self, Inodes[i.var], Is[i.var], t, var=j)
+                Is[i.var] = i.add(self, Inodes[i.var], Is[i.var], t, var=i.var)
 
         with h5py.File(file_name, 'w') as f:
             for i in input_vars:
@@ -424,7 +424,7 @@ class Circuit(object):
             recorders.append((i,None))
         with open('record_parameters.pickle', 'wb') as f:
             pickle.dump(recorders, f, protocol=pickle.HIGHEST_PROTOCOL)
-    def sim(self, t_duration, t_step, in_list = None, record = ['V', 'spike_state', 'I'], preamble = []):
+    def sim(self, t_duration, t_step, in_list=None, record = ['V', 'spike_state', 'I'], preamble = [], args=[]):
         """
         Simulates the circuit for a set amount of time, with a fixed temporal
         step size and a list of inputs.
@@ -437,7 +437,9 @@ class Circuit(object):
         if not os.path.isfile('neuroballad_execute.py'):
             copyfile(get_neuroballad_path() + '/neuroballad_execute.py',\
                      'neuroballad_execute.py')
-        subprocess.call(preamble + ['python','neuroballad_execute.py'])
+
+        subprocess.call(preamble + ['python','neuroballad_execute.py'] + args)
+
     def collect(self):
         data = {'in': {}, 'out': {}}
         uids = {'in': {}, 'out': {}}
@@ -446,13 +448,14 @@ class Circuit(object):
             for k in f.keys():
                 data['in'][k] = f[k]['data']
                 uids['in'][k] = f[k]['uids'].astype(str)
-                
+
         with h5py.File('neuroballad_temp_model_output.h5', 'r') as f:
             for k in f.keys():
                 if k != 'metadata':
                     data['out'][k] = f[k]['data'][()]
                     uids['out'][k] = f[k]['uids'][()].astype(str)
         return uids, data
+
     def collect_results(self):
         """
         Collects the latest results from the executor. Useful when loading
@@ -560,15 +563,11 @@ class Circuit(object):
 
 
 ### Component Definitions
-
-
-
 class Element(object):
     element_class = 'None'
     states = {}
     params = {}
-    
-    def __init__(self, name = "", **kwargs):
+    def __init__(self, name="", **kwargs):
         self.space = {'name': name}
         self.space.update(self.states)
         self.space.update(self.params)
@@ -582,7 +581,7 @@ class Element(object):
             else:
                 self.space['initV'] = initV
         self.space['class'] = self.__class__.__name__
-        
+
     def nadd(self, C, i, experiment_name, default_tags):
         # name_dict = {'name': i, 'experiment_name': experiment_name}
         # name = tags_to_json(name_dict)
@@ -602,120 +601,23 @@ class Element(object):
         return C.G
 
 
-class HodgkinHuxley(Element):
-    element_class = 'neuron'
-    states = {'n': 0., 'm': 0., 'h': 1.0}
-    params = {}
-
-class ConnorStevens(Element):
-    element_class = 'neuron'
-    states = {'n': 0., 'm': 0., 'h': 1.0, 'a': 0., 'b': 0.}
-    params = {}
-
-class LeakyIAF(Element):
-    element_class = 'neuron'
-    states = {'initV': 10001.}
-    params = {'resting_potential': 0., 
-              'reset_potential': 0., 
-              'threshold': 1.0, 
-              'capacitance': 0., 
-              'resistance': 0.}
-
-class AlphaSynapse(Element):
-    element_class = 'synapse'
-    states = {}
-    params = {'ar': 1.1*1e2, 
-              'ad': 1.9*1e3, 
-              'reverse': 65.0, 
-              'gmax': 3*1e-6}
-
-class PowerGPotGPot(Element):
-    element_class = 'synapse'
-    states = {}
-    params = {'power': 1.0, 
-              'slope': 0.02, 
-              'saturation': 0.4, 
-              'threshold': -55.0, 
-              'reverse': 0.0, 
-              'gmax': 0.4}
-
-class MorrisLecar(Element):
-    element_class = 'synapse'
-    states = {'V1': -20.,
-              'V2': 50.,
-              'V3': -40.,
-              'V4': 20.0,
-              'initV': -46.080,
-              'initn': 0.3525}
-    params = {'phi': 0.4,
-              'offset': 0., 
-              'V_L': -40., 
-              'V_Ca': 120., 
-              'V_K': -80., 
-              'g_L': 3., 
-              'g_Ca': 4., 
-              'g_K': 16.}
-
-class Activator(Element):
-    element_class = 'abstract'
-    states = {}
-    params = {'beta': 1.0, 
-              'K': 1.0, 
-              'n': 1.0}
-
-class Repressor(Element):
-    element_class = 'abstract'
-    states = {}
-    params = {'beta': 1.0, 
-              'K': 1.0, 
-              'n': 1.0}
-
-class Integrator(Element):
-    element_class = 'abstract'
-    states = {}
-    params = {'gamma': 0.0}
-
-class CurrentModulator(Element):
-    element_class = 'abstract'
-    states = {}
-    params = {'A': 1.0,
-              'shift': 0.0}
-
-class OutPort(Element):
-    element_class = 'port'
-    states = {}
-    params = {'port_type': 'gpot',
-              'class': 'Port',
-              'port_io': 'out',
-              'lpu': 'lpu',
-              'selector': '/%s/out/%s/' % ('lpu', 'gpot')}
-
-class InPort(Element):
-    element_class = 'port'
-    states = {}
-    params = {'port_type': 'spike',
-              'class': 'Port',
-              'port_io': 'in',
-              'lpu': 'lpu',
-              'selector': '/%s/in/%s/' % ('lpu', 'gpot')}
-
-### Input Processors
-
 class Input(Element):
+    '''Input Processors Wrapper
+    '''
     element_class = 'input'
     states = {}
     params = {}
 
-    def __init__(self, name = "", experiment_name='', **kwargs):
+    def __init__(self, name="", experiment_name='', **kwargs):
         self.experiment_name = experiment_name
         self.space = {'name': name}
         self.space.update(self.states)
         self.space.update(self.params)
-    
+
     def add(self, C, uids, I, t, var=None):
         # name_dict = {'name': i, 'experiment_name': experiment_name}
         # name = tags_to_json(name_dict)
-        name = C.encode_name(i)
+        name = C.encode_name(i) # DEBUG: `i` is not defined
         self.space['name'] = name
         if 'selector' in self.space:
             self.space['selector'] += str(i)
@@ -726,145 +628,3 @@ class Input(Element):
             attrs = {name: {'n': self.space['n']}}
             nx.set_node_attributes(C.G, attrs)
         return C.G
-    def addToExperiment(self):
-        return self.params
-
-class InIBoxcar(Input):
-    element_class = 'input'
-    def __init__(self, node_id, I_val, t_start, t_end, var = 'I', experiment_name=''):
-        self.experiment_name = experiment_name
-        self.node_id = node_id
-        self.I_val = I_val
-        self.t_start = t_start
-        self.t_end = t_end
-        self.var = var
-        a = {}
-        a['name'] = 'InIBoxcar'
-        a['node_id'] = node_id
-        a['I_val'] = I_val
-        a['t_start'] = t_start
-        a['t_end'] = t_end
-        self.params = a
-    def add(self, C, uids, I, t, var=None):
-        try:
-            uids = [i.decode('ascii') for i in uids]
-        except:
-            pass
-        step_range = [self.t_start, self.t_end]
-        step_intensity = self.I_val
-        I[np.logical_and(t>step_range[0], t<step_range[1]),
-        np.where([i == (C.encode_name(str(self.node_id), experiment_name=self.experiment_name)) for i in uids])] += step_intensity
-        return I
-    def addToExperiment(self):
-        return self.params
-
-class InArray(Input):
-    element_class = 'input'
-    def __init__(self, node_id, I_vals, experiment_name=''):
-        self.experiment_name = experiment_name
-        self.node_id = node_id
-        self.I_vals = I_vals
-        a = {}
-        a['name'] = 'InArray'
-        a['node_id'] = node_id
-        a['I_vals'] = I_vals
-        self.var = list(I_vals.keys())
-        self.params = a
-    def add(self, C, uids, I, t, var=None):
-        try:
-            uids = [i.decode('ascii') for i in uids]
-        except:
-            pass
-        a = I[:, np.where([i == (C.encode_name(str(self.node_id), experiment_name=self.experiment_name)) for i in uids])]
-        X = self.params['I_vals'][var].reshape(a.shape)
-        I[:, np.where([i == (C.encode_name(str(self.node_id), experiment_name=self.experiment_name)) for i in uids])] += X
-        return I
-    def addToExperiment(self):
-        return self.params
-
-class InIStep(InIBoxcar):
-    element_class = 'input'
-
-class InIGaussianNoise(Input):
-    element_class = 'input'
-    def __init__(self, node_id, mean, std, t_start, t_end, var='I'):
-        self.node_id = node_id
-        self.mean = mean
-        self.std = std
-        self.t_start = t_start
-        self.t_end = t_end
-        self.var = var
-        a = {}
-        a['name'] = 'InIGaussianNoise'
-        a['node_id'] = node_id
-        a['mean'] = mean
-        a['std'] = std
-        a['t_start'] = t_start
-        a['t_end'] = t_end
-        self.params = a
-    def add(self, uids, I, t, var=None):
-        step_range = [self.t_start, self.t_end]
-        uids = [i.decode("utf-8") for i in uids]
-        I[np.logical_and(t>step_range[0], t<step_range[1]),
-        np.where([i == ('uid' + str(self.node_id)) for i in uids])] += self.mean + self.std*\
-        np.array(np.random.randn(len(np.where(np.logical_and(t>step_range[0], \
-        t<step_range[1])))))
-        return I
-    def addToExperiment(self):
-        return self.params
-
-class InISinusoidal(object):
-    element_class = 'input'
-    def __init__(self, 
-                 node_id, 
-                 amplitude, 
-                 frequency, 
-                 t_start, 
-                 t_end, 
-                 mean = 0, 
-                 shift = 0., 
-                 frequency_sweep = 0.0, 
-                 frequency_sweep_frequency = 1.0, 
-                 threshold_active = 0, 
-                 threshold_value = 0.0,
-                 var = 'I'):
-        self.node_id = node_id
-        self.amplitude = amplitude
-        self.frequency = frequency
-        self.mean = mean
-        self.t_start = t_start
-        self.t_end = t_end
-        self.shift = shift
-        self.threshold_active = threshold_active
-        self.threshold_value = threshold_value
-        self.frequency_sweep_frequency = frequency_sweep_frequency
-        self.frequency_sweep = frequency_sweep
-        self.var = var
-        a = {}
-        a['name'] = 'InISinusoidal'
-        a['node_id'] = node_id
-        a['amplitude'] = amplitude
-        a['frequency'] = frequency
-        a['t_start'] = t_start
-        a['t_end'] = t_end
-        a['mean'] = mean
-        a['shift'] = shift
-        a['frequency_sweep'] = frequency_sweep
-        a['frequency_sweep_frequency'] = frequency_sweep_frequency
-        a['threshold_active'] = threshold_active
-        a['threshold_value'] = threshold_value
-        self.params = a
-    def add(self, uids, I, t, var=None):
-        step_range = [self.t_start, self.t_end]
-        uids = [i.decode("utf-8") for i in uids]
-        sin_wave = np.sin(2 * np.pi * t * (self.frequency + self.frequency_sweep * np.sin(2 * np.pi * t * self.frequency_sweep_frequency)) + self.shift)
-        values_to_add = self.mean + self.amplitude * \
-                sin_wave[np.logical_and(t>step_range[0], t<step_range[1])]
-        if self.threshold_active>0:
-            values_to_add[values_to_add>self.threshold_value] = np.max(values_to_add)
-            values_to_add[values_to_add<=self.threshold_value] = np.min(values_to_add)
-        I[np.logical_and(t>step_range[0], t<step_range[1]),
-        np.where([i == ('uid' + str(self.node_id)) for i in uids])] += values_to_add
-        return I
-    def addToExperiment(self):
-        return self.params
