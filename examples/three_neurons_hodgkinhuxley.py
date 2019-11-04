@@ -22,7 +22,7 @@ C_in_a = InIStep(node_id=0, I_val=40., t_start=0.20, t_end=0.40) #Create current
 C_in_b = InIStep(node_id=2, I_val=40., t_start=0.40, t_end=0.60) #Create current input for node 2
 C_in_c = InIStep(node_id=4, I_val=40., t_start=0.60, t_end=0.80) #Create current input for node 4
 C_in_d = InIStep(node_id=4, I_val=40., t_start=0.60, t_end=0.80,
-                 experiment_name='hello') #Create current input for node 4 in the new experiment
+                 experiment_name='hello') # Create current input for node 4 in the new experiment
 
 #Use the four inputs and simulate the circuit for 1 second with a dt of 1e-4
 C.sim(duration=1., dt=1e-4, in_list=[C_in_a, C_in_b, C_in_c, C_in_d])

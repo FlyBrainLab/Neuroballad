@@ -52,11 +52,11 @@ class Circuit(object):
         self.node_ids = []  # Graph ID's
         self.tracked_variables = []  # Observable variables in circuit
         self._inputs = None # input nodes
-        self._outputs = None # output nodes
+#        self._outputs = None # output nodes
 #        self.experiment_config = []
         self.experiment_name = experiment_name
         self.dtype = dtype
-        self.ICs = []
+#        self.ICs = []
         self.name = name
         self.manager = None # LPU Manager
 
@@ -358,14 +358,17 @@ class Circuit(object):
             if in_name in list(self.G.nodes(data=False)):
                 pass
             else:
-                print('Not found in node names.')
+                raise ValueError('Input node {} not found in Circuit.'.format(in_name))
+
             if isinstance(i.var, list):
                 for j in i.var:
-                    Inodes[j].append(self.encode_name(str(i.node_id),
-                                                      experiment_name=i.experiment_name))
+                    Inodes[j].append(
+                        self.encode_name(str(i.node_id),
+                                         experiment_name=i.experiment_name))
             else:
-                Inodes[i.var].append(self.encode_name(str(i.node_id),
-                                                      experiment_name=i.experiment_name))
+                Inodes[i.var].append(
+                    self.encode_name(str(i.node_id),
+                                     experiment_name=i.experiment_name))
         for i in input_vars:
             Inodes[i] = np.array(list(set(Inodes[i])), dtype='S')
         for i in input_vars:
@@ -395,10 +398,7 @@ class Circuit(object):
                 f.create_dataset(i + '/data', (self.config.steps, len(Inodes[i])),
                                  dtype=self.dtype,
                                  data=Is[i])
-        recorders = []
-        for i in record:
-            recorders.append((i, None))
-        
+
         from neurokernel.core_gpu import Manager
         from neurokernel.LPU.LPU import LPU
         import neurokernel.mpi_relaunch
@@ -409,7 +409,7 @@ class Circuit(object):
 
         input_processor = FileInputProcessor(input_filename)
         (comp_dict, conns) = LPU.graph_to_dicts(self.G)
-        output_processor = FileOutputProcessor(recorders,
+        output_processor = FileOutputProcessor([(i, None) for i in record],
                                                output_filename,
                                                sample_interval=1)
         self.manager = Manager()
@@ -431,7 +431,7 @@ class Circuit(object):
         """
         Simulates the circuit for a set amount of time, with a fixed temporal
         step size and a list of inputs.
-        
+
         TODO
         ----
         1. use preamble and args for slurm

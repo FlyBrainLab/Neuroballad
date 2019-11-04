@@ -54,23 +54,34 @@ class Input(Element):
     states = {}
     params = {}
 
-    def __init__(self, name="", experiment_name='', **kwargs):
+    def __init__(self, name='', experiment_name='', **kwargs):
         self.experiment_name = experiment_name
         self.space = {'name': name}
         self.space.update(self.states)
         self.space.update(self.params)
 
     def add(self, C, uids, I, t, var=None):
+        '''Add input to circuit
+        Parameters
+        ----------
+        C: Circuit
+        uids: array of dtype 'S'
+        I: numpy ndarray
+        t:  time vector
+        var: variable
+        '''
+        raise NotImplementedError('To be implemented by child class')
         # name_dict = {'name': i, 'experiment_name': experiment_name}
         # name = tags_to_json(name_dict)
-        name = C.encode_name(i)  # DEBUG: `i` is not defined
-        self.space['name'] = name
-        if 'selector' in self.space:
-            self.space['selector'] += str(i)
-        space = copy.deepcopy(self.space)
-        C.G.add_node(name, **space)
-        if 'n' in space:
-            del space['n']
-            attrs = {name: {'n': self.space['n']}}
-            nx.set_node_attributes(C.G, attrs)
-        return C.G
+        
+        # name = C.encode_name(i)  # DEBUG: `i` is not defined
+        # self.space['name'] = name
+        # if 'selector' in self.space:
+        #     self.space['selector'] += str(i)
+        # space = copy.deepcopy(self.space)
+        # C.G.add_node(name, **space)
+        # if 'n' in space:
+        #     del space['n']
+        #     attrs = {name: {'n': self.space['n']}}
+        #     nx.set_node_attributes(C.G, attrs)
+        # return C.G
