@@ -1,4 +1,4 @@
-from ..neuroballad import Element
+from .element import Element
 
 class Activator(Element):
     element_class = 'abstract'

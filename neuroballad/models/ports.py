@@ -1,4 +1,4 @@
-from ..neuroballad import Element
+from .element import Element, Input
 
 class OutPort(Element):
     element_class = 'port'

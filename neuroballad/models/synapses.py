@@ -1,4 +1,4 @@
-from ..neuroballad import Element
+from .element import Element
 class AlphaSynapse(Element):
     element_class = 'synapse'
     states = {}
