@@ -197,7 +197,7 @@ class Circuit(object):
         cluster_inds = []
         for i in range(number):
             i_toadd = self.get_new_id()
-            neuron.nadd(self, i_toadd)
+            neuron.nadd(self, i_toadd, self.experiment_name, self.default_tags)
             self.node_ids.append(i_toadd)
             cluster_inds.append(i_toadd)
         return cluster_inds
@@ -331,7 +331,6 @@ class Circuit(object):
                                            steps=steps,
                                            dt=dt,
                                            t=t)
-
         # compile inputs
         if in_list is None:
             in_list = self._inputs
@@ -409,7 +408,7 @@ class Circuit(object):
 
         input_processor = FileInputProcessor(input_filename)
         (comp_dict, conns) = LPU.graph_to_dicts(self.G)
-        output_processor = FileOutputProcessor([(i, None) for i in record],
+        output_processor = FileOutputProcessor([(i, None) for i in list(record)],
                                                output_filename,
                                                sample_interval=1)
         self.manager = Manager()
