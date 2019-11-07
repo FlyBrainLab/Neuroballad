@@ -1,23 +1,19 @@
 '''Neuroballad Circuit class
 '''
-import os
 import copy
 import json
 import time
-import pickle
-import subprocess
-from shutil import copyfile
 from collections import namedtuple
 
 import h5py
 import numpy as np
 import networkx as nx
 from neurokernel.tools.logging import setup_logger
-from .neuroballad import get_neuroballad_path
-from .models.element import Element, Input
+from neuroballad.models.element import Element, Input
 
 SimConfig = namedtuple('SimConfig',
                        ['dt', 'duration', 'steps', 't', 'device'])
+
 
 class Circuit(object):
     """
@@ -48,17 +44,19 @@ class Circuit(object):
     def __init__(self, name='', dtype=np.float64, experiment_name=''):
         self.G = nx.MultiDiGraph()  # Neurokernel graph definition
         results = {}  # Simulation results
-        self.config = SimConfig(duration=None, steps=None, dt=1e-4, t=None, device=0)
+        self.config = SimConfig(duration=None, steps=None,
+                                dt=1e-4, t=None, device=0)
         self.node_ids = []  # Graph ID's
         self.tracked_variables = []  # Observable variables in circuit
-        self._inputs = None # input nodes
+        self._inputs = None  # input nodes
 #        self._outputs = None # output nodes
 #        self.experiment_config = []
         self.experiment_name = experiment_name
         self.dtype = dtype
 #        self.ICs = []
         self.name = name
-        self.manager = None # LPU Manager
+        self.manager = None  # LPU Manager
+        self.logger = None # logger
 
     def set_experiment(self, experiment_name):
         self.experiment_name = experiment_name
@@ -204,7 +202,7 @@ class Circuit(object):
         return cluster_inds
 
     def dense_connect_variable(self, in_array_a, in_array_b, neuron,
-                          delay=0.0, variable='', tag=0, debug=False):
+                               delay=0.0, variable='', tag=0, debug=False):
         """
         Densely connects two arrays of circuit ID's, creating a layer of unique
         components of a specified type in between.
@@ -218,7 +216,8 @@ class Circuit(object):
                 i_toadd = self.get_new_id()
                 if debug:
                     print('Added neuron ID: ' + str(i_toadd))
-                neuron.nadd(self, i_toadd, self.experiment_name, self.default_tags)
+                neuron.nadd(self, i_toadd, self.experiment_name,
+                            self.default_tags)
                 self.node_ids.append(i_toadd)
                 self.join([[i, i_toadd], [i_toadd, j]],
                           delay=delay, variable=variable, tag=tag)
@@ -258,8 +257,10 @@ class Circuit(object):
         for i in in_array_a:
             for j in in_array_b:
                 if variable is not None:
-                    self.join([i, in_array_c[k]], delay=delay[0], variable=variable[0])
-                    self.join([in_array_c[k], j], delay=delay[1], variable=variable[1])
+                    self.join([i, in_array_c[k]], delay=delay[0],
+                              variable=variable[0])
+                    self.join([in_array_c[k], j], delay=delay[1],
+                              variable=variable[1])
                 else:
                     self.join([i, in_array_c[k]], delay=delay[0])
                     self.join([in_array_c[k], j], delay=delay[1])
@@ -369,7 +370,8 @@ class Circuit(object):
             if in_name in list(self.G.nodes(data=False)):
                 pass
             else:
-                raise ValueError('Input node {} not found in Circuit.'.format(in_name))
+                raise ValueError(
+                    'Input node {} not found in Circuit.'.format(in_name))
 
             if isinstance(i.var, list):
                 for j in i.var:
@@ -412,7 +414,7 @@ class Circuit(object):
 
         if graph_filename is not None:
             nx.write_gexf(self.G, graph_filename)
-        
+
         from neurokernel.core_gpu import Manager
         from neurokernel.LPU.LPU import LPU
         import neurokernel.mpi_relaunch
@@ -570,7 +572,8 @@ class Circuit(object):
         matplotlib.use('agg')
         import matplotlib.pyplot as plt
         G = self.G
-        classnames = list(set([item for key,item in nx.get_node_attributes(G, 'class').items()]))
+        classnames = list(
+            set([item for key, item in nx.get_node_attributes(G, 'class').items()]))
         colors = plt.cm.get_cmap('Spectral', len(classnames))
         # G.remove_nodes_from(nx.isolates(G))
         mapping = {}
