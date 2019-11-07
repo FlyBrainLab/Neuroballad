@@ -158,10 +158,10 @@ class Circuit(object):
         except Exception as e:
             pass
             # TODO: use raise ValueError('ASCII decode failed for {}, error {}'.format(i, e))
-
         if experiment_name is None:
             experiment_name = self.experiment_name
-        name_dict = {'name': str(i), 'experiment_name': experiment_name}
+
+        name_dict = {'name': str(i), 'exp': experiment_name}
         name = self.tags_to_json(name_dict)
         return name
 
@@ -185,7 +185,7 @@ class Circuit(object):
                 neuron.nadd(self, i, self.experiment_name, self.default_tags)
                 self.node_ids.append([str(i), self.experiment_name])
 
-    def add_cluster(self, number, neuron):
+    def add_cluster(self, number, neuron, name=None):
         """
         Creates a number of components of a specific type and returns their
         ID's.
@@ -197,30 +197,31 @@ class Circuit(object):
         cluster_inds = []
         for i in range(number):
             i_toadd = self.get_new_id()
-            neuron.nadd(self, i_toadd, self.experiment_name, self.default_tags)
-            self.node_ids.append(i_toadd)
-            cluster_inds.append(i_toadd)
+            _id = '{}-{}'.format(name, i_toadd)
+            neuron.nadd(self, _id, self.experiment_name, self.default_tags)
+            self.node_ids.append(_id)
+            cluster_inds.append(_id)
         return cluster_inds
 
-    def dense_connect_via(self, in_array_a, in_array_b, neuron,
-                          delay=0.0, via='', tag=0, debug=False):
+    def dense_connect_variable(self, in_array_a, in_array_b, neuron,
+                          delay=0.0, variable='', tag=0, debug=False):
         """
         Densely connects two arrays of circuit ID's, creating a layer of unique
         components of a specified type in between.
 
         Example
         --------
-        >>> C.dense_join_via(cluster_a, cluster_b, AlphaSynapse())
+        >>> C.dense_join_variable(cluster_a, cluster_b, AlphaSynapse())
         """
         for i in in_array_a:
             for j in in_array_b:
                 i_toadd = self.get_new_id()
                 if debug:
                     print('Added neuron ID: ' + str(i_toadd))
-                neuron.nadd(self, i_toadd)
+                neuron.nadd(self, i_toadd, self.experiment_name, self.default_tags)
                 self.node_ids.append(i_toadd)
                 self.join([[i, i_toadd], [i_toadd, j]],
-                          delay=delay, via=via, tag=tag)
+                          delay=delay, variable=variable, tag=tag)
 
     def dense_connect(self, in_array_a, in_array_b, delay=0.0):
         """Densely connect clusters
