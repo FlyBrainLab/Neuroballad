@@ -3,3 +3,7 @@
 *.gexf.gz
 *.h5
 /*.egg-info
+
+*.pickle
+*.py~
+*.log
