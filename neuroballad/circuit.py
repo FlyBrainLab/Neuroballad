@@ -530,7 +530,8 @@ class Circuit(object):
         self.V.run()
 
     def visualize_circuit(self, prog='dot', splines='line',
-                          filename='neuroballad_temp_circuit.svg'):
+                          filename='neuroballad_temp_circuit.svg',
+                          maxiter=10000):
         styles = {
             'graph': {
                 'label': self.name,
@@ -565,8 +566,12 @@ class Circuit(object):
                 'concentrate': 'false',
             }
         }
-        #G = nx.read_gexf('neuroballad_temp_model.gexf.gz')
+        import matplotlib
+        matplotlib.use('agg')
+        import matplotlib.pyplot as plt
         G = self.G
+        classnames = list(set([item for key,item in nx.get_node_attributes(G, 'class').items()]))
+        colors = plt.cm.get_cmap('Spectral', len(classnames))
         # G.remove_nodes_from(nx.isolates(G))
         mapping = {}
         node_types = set()
@@ -589,12 +594,16 @@ class Circuit(object):
             e = A.get_edge(i[0], i[1])
             #e.attr['splines'] = 'ortho'
             e.attr.update(styles['edges'])
+            e.attr.update(label=e.attr['variable'])
             if i[0][:-1] == 'Repressor':
                 e.attr['arrowhead'] = 'tee'
         for i in A.nodes():
             n = A.get_node(i)
             #n.attr['shape'] = 'box'
             n.attr.update(styles['nodes'])
-        A.layout(prog=prog)
+            c = colors(classnames.index(n.attr['class']))
+            n.attr.update(style='rounded,filled',
+                          fillcolor=matplotlib.colors.rgb2hex(c))
+        A.layout(prog=prog, args='-Emaxiter={}'.format(maxiter))
         A.draw(filename)
         return A
