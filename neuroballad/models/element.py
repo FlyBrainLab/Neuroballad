@@ -29,23 +29,44 @@ class Element(object):
                 self.space['initV'] = initV
         self.space['class'] = self.__class__.__name__
 
-    def nadd(self, C, i, experiment_name, default_tags):
-        # name_dict = {'name': i, 'experiment_name': experiment_name}
-        # name = tags_to_json(name_dict)
-        name = C.encode_name(i)
+    def __repr__(self):
+        '''Return ClassName on repr() call
+        TODO: maybe use `self.space['class']`
+        '''
+        clsname = str(self.__class__)
+        return repr(clsname).split(".")[-1].split("'")[0]
+
+    def nadd(self, C, _id, experiment_name=None, default_tags=None):
+        '''Add multiple component to circuit'''
+        name = C.encode_name(_id, experiment_name=experiment_name)
         self.space['name'] = name
-        for i in default_tags.keys():
-            if i not in self.space.keys():
-                self.space[i] = default_tags[i]
+        for key, item in default_tags.items():
+            if key not in self.space.keys():
+                self.space[key] = item
         if 'selector' in self.space:
-            self.space['selector'] += str(i)
-        space = copy.deepcopy(self.space)
+            self.space['selector'] += str(_id)  # DEBUG: is this right?
+        space = copy.deepcopy(self.space)  # TOOD: is this necessary?
         C.G.add_node(name, **space)
-        if 'n' in space:
+        if 'n' in space:  # TODO: that is this for?
             del space['n']
             attrs = {name: {'n': self.space['n']}}
             nx.set_node_attributes(C.G, attrs)
         return C.G
+
+    @property
+    def accesses(self):
+        '''Mirror NDComponent accesses'''
+        if self._ndcomp is not None:
+            return self._ndcomp.accesses
+        return None
+
+    @property
+    def updates(self):
+        '''Mirror NDComponent updates'''
+        if self._ndcomp is not None:
+            return self._ndcomp.updates
+        return None
+
 
 class Input(Element):
     '''Input Processors Wrapper
@@ -73,7 +94,7 @@ class Input(Element):
         raise NotImplementedError('To be implemented by child class')
         # name_dict = {'name': i, 'experiment_name': experiment_name}
         # name = tags_to_json(name_dict)
-        
+
         # name = C.encode_name(i)  # DEBUG: `i` is not defined
         # self.space['name'] = name
         # if 'selector' in self.space:

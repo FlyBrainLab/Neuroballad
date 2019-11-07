@@ -229,14 +229,14 @@ class Circuit(object):
 
         Example
         --------
-        >>> C.dense_connect_via(cluster_a, cluster_b)
+        >>> C.dense_connect_variable(cluster_a, cluster_b)
         """
         for i in in_array_a:
             for j in in_array_b:
                 self.join([[i, j]], delay=delay)
 
-    def dense_join(self, in_array_a, in_array_b, in_array_c, delay=0.0):
-        """Densely connect clusters via intermediary elements
+    def dense_join_variable(self, in_array_a, in_array_b, in_array_c, delay=0.0, variable=None):
+        """Densely connect clusters variable intermediary elements
         Densely connects two arrays of circuit ID's, using a third array as the
         matrix of components that connects the two.
 
@@ -247,17 +247,25 @@ class Circuit(object):
 
         Example
         --------
-        >>> C.dense_join_via(cluster_a, cluster_b, cluster_c)
+        >>> C.dense_join_variable(cluster_a, cluster_b, cluster_c)
         """
+        if np.isscalar(delay):
+            delay = [delay]*2
+        if isinstance(variable, str):
+            variable = [variable]*2
         k = 0
         in_array_c = in_array_c.flatten()
         for i in in_array_a:
             for j in in_array_b:
-                self.join([[i, in_array_c[k]], [in_array_c[k], j]],
-                          delay=delay)
+                if variable is not None:
+                    self.join([i, in_array_c[k]], delay=delay[0], variable=variable[0])
+                    self.join([in_array_c[k], j], delay=delay[1], variable=variable[1])
+                else:
+                    self.join([i, in_array_c[k]], delay=delay[0])
+                    self.join([in_array_c[k], j], delay=delay[1])
                 k += 1
 
-    def join(self, in_array, delay=0.0, via=None, tag=0):
+    def join(self, in_array, delay=0.0, variable=None, tag=0):
         """
         Processes an edge list and adds the edges to the circuit.
 
@@ -270,7 +278,7 @@ class Circuit(object):
         in_array = np.array(in_array)
         # print(in_array)
         for i in range(in_array.shape[0]):
-            if via is None:
+            if variable is None:
                 self.G.add_edge(self.encode_name(str(in_array[i, 0])),
                                 self.encode_name(str(in_array[i, 1])),
                                 delay=delay,
@@ -279,7 +287,7 @@ class Circuit(object):
                 self.G.add_edge(self.encode_name(str(in_array[i, 0])),
                                 self.encode_name(str(in_array[i, 1])),
                                 delay=delay,
-                                via=via,
+                                variable=variable,
                                 tag=tag)
 
     def fit(self, inputs):
