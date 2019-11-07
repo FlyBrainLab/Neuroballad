@@ -81,10 +81,10 @@ class Circuit(object):
 
         Example
         --------
-        >>> C.dense_connect_via(cluster_a, cluster_b)
+        >>> C.dense_connect_variable(cluster_a, cluster_b)
         """
         if self.node_ids == []:
-            return '0'
+            return '1'
         else:
             return str(len(self.node_ids)+1)
         # return next(filter(set(self.node_ids).__contains__, \
