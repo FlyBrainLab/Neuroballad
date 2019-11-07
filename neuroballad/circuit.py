@@ -17,7 +17,7 @@ from .neuroballad import get_neuroballad_path
 from .models.element import Element, Input
 
 SimConfig = namedtuple('SimConfig',
-                       ['dt', 'duration', 'steps', 't'])
+                       ['dt', 'duration', 'steps', 't', 'device'])
 
 class Circuit(object):
     """
@@ -48,7 +48,7 @@ class Circuit(object):
     def __init__(self, name='', dtype=np.float64, experiment_name=''):
         self.G = nx.MultiDiGraph()  # Neurokernel graph definition
         results = {}  # Simulation results
-        self.config = SimConfig(duration=None, steps=None, dt=1e-4, t=None)
+        self.config = SimConfig(duration=None, steps=None, dt=1e-4, t=None, device=0)
         self.node_ids = []  # Graph ID's
         self.tracked_variables = []  # Observable variables in circuit
         self._inputs = None # input nodes
@@ -330,7 +330,8 @@ class Circuit(object):
         self.config = self.config._replace(duration=duration,
                                            steps=steps,
                                            dt=dt,
-                                           t=t)
+                                           t=t,
+                                           device=device)
         # compile inputs
         if in_list is None:
             in_list = self._inputs
@@ -410,11 +411,11 @@ class Circuit(object):
         (comp_dict, conns) = LPU.graph_to_dicts(self.G)
         output_processor = FileOutputProcessor([(i, None) for i in list(record)],
                                                output_filename,
-                                               sample_interval=1)
+                                               sample_interval=sample_interval)
         self.manager = Manager()
         self.manager.add(LPU, self.experiment_name, self.config.dt,
                          comp_dict, conns,
-                         device=0, #self.config.device,
+                         device=self.config.device,
                          input_processors=[input_processor],
                          output_processors=[output_processor],
                          debug=False,
