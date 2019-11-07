@@ -323,7 +323,9 @@ class Circuit(object):
     def compile(self, duration, dt=None, steps=None, in_list=None,
                 record=('V', 'spike_state', 'I'), extra_comps=None,
                 input_filename='neuroballad_temp_model_input.h5',
-                output_filename='neuroballad_temp_model_output.h5'):
+                output_filename='neuroballad_temp_model_output.h5',
+                graph_filename='neuroballand_temp_graph.gexf.gz',
+                device=0, sample_interval=1):
         if dt is not None:
             if steps is not None:
                 assert dt*steps == duration, 'dt*step != duration'
@@ -408,6 +410,9 @@ class Circuit(object):
                                  dtype=self.dtype,
                                  data=Is[i])
 
+        if graph_filename is not None:
+            nx.write_gexf(self.G, graph_filename)
+        
         from neurokernel.core_gpu import Manager
         from neurokernel.LPU.LPU import LPU
         import neurokernel.mpi_relaunch
@@ -434,8 +439,11 @@ class Circuit(object):
 
     def sim(self, duration, dt, steps=None, in_list=None,
             record=('V', 'spike_state', 'I'), log=None,
+            device=0, sample_interval=1,
             input_filename='neuroballad_temp_model_input.h5',
             output_filename='neuroballad_temp_model_output.h5',
+            graph_filename='neuroballand_temp_graph.gexf.gz',
+            log_filename='neuroballand_temp_log.log',
             extra_comps=None, preamble=[], args=[]):
         """
         Simulates the circuit for a set amount of time, with a fixed temporal
@@ -453,14 +461,16 @@ class Circuit(object):
             screen = False
             file_name = None
             if log.lower() in ['file', 'both']:
-                file_name = 'neuroballad_{}.log'.format(self.experiment_name)
+                file_name = log_filename
             if log.lower() in ['screen', 'both']:
                 screen = True
             self.logger = setup_logger(file_name=file_name, screen=screen)
 
         self.compile(duration, dt, steps=steps,
                      in_list=in_list, record=record, extra_comps=extra_comps,
-                     input_filename=input_filename, output_filename=output_filename)
+                     input_filename=input_filename, output_filename=output_filename,
+                     graph_filename=graph_filename,
+                     device=device, sample_interval=sample_interval)
         self.manager.spawn()
         self.manager.start(self.config.steps)
         self.manager.wait()
@@ -519,7 +529,8 @@ class Circuit(object):
         self.V.out_filename = out_name
         self.V.run()
 
-    def visualize_circuit(self, prog='dot', splines='line'):
+    def visualize_circuit(self, prog='dot', splines='line',
+                          filename='neuroballad_temp_circuit.svg'):
         styles = {
             'graph': {
                 'label': self.name,
@@ -582,9 +593,8 @@ class Circuit(object):
                 e.attr['arrowhead'] = 'tee'
         for i in A.nodes():
             n = A.get_node(i)
-            print(n)
             #n.attr['shape'] = 'box'
             n.attr.update(styles['nodes'])
         A.layout(prog=prog)
-        A.draw('neuroballad_temp_circuit.svg')
-        A.draw('neuroballad_temp_circuit.eps')
+        A.draw(filename)
+        return A

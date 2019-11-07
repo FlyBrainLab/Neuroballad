@@ -10,6 +10,7 @@ class Element(object):
     element_class = 'None'
     states = {}
     params = {}
+    _ndcomp = None
 
     def __init__(self, name="", **kwargs):
         self.space = {'name': name}
