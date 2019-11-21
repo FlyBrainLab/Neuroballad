@@ -3,7 +3,7 @@ __version__ = '0.1.0'
 
 from .neuroballad import *
 from .circuit import Circuit
-from .experiment import Experiment
+# from .experiment import Experiment
 from .models.element import Element, Input
 
 from .models.abstracts import *
