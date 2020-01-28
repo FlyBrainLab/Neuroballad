@@ -41,6 +41,8 @@ parser.add_argument('-r', '--time_sync', default=False, action='store_true',
                     help='Time data reception throughput [default: False]')
 parser.add_argument('-g', '--gpu_dev', default=[0], type=int, nargs='+',
                     help='GPU device numbers [default: 0]')
+parser.add_argument('-ec', '--extra_comps', default=[],
+                    help='extra components to be used by LPU class')
 parser.add_argument('-d', '--disconnect', default=False, action='store_true',
                     help='Run with disconnected LPUs [default: False]')
 args = parser.parse_args()
@@ -55,11 +57,12 @@ man = core.Manager()
 
 man.add(LPU, 'lpu', dt, comp_dict, conns,
         input_processors=[fl_input_processor],
-        output_processors=[output_processor], device=args.gpu_dev[0],
+        output_processors=[output_processor],
+        device=args.gpu_dev[0],
+        extra_comps=args.extra_comps,
         debug=True)
 
 steps = int(dur/dt)
 man.spawn()
-man.start(steps = steps)
+man.start(steps=steps)
 man.wait()
-
