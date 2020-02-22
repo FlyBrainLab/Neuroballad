@@ -1,5 +1,6 @@
 '''Neuroballad Circuit class
 '''
+import dataclasses
 import copy
 import json
 import time
@@ -9,11 +10,17 @@ import h5py
 import numpy as np
 import networkx as nx
 from neurokernel.tools.logging import setup_logger
-from neuroballad.models.element import Element, Input
+
+from .models.element import Element, Input
 from .visualizer import visualize_circuit, visualize_video
 
-SimConfig = namedtuple('SimConfig',
-                       ['dt', 'duration', 'steps', 't', 'device'])
+@dataclasses.dataclass
+class SimConfig:
+    dt: float = 1e-4
+    duration: float = None
+    steps: int = None
+    t: np.ndarray = None
+    device: int = 0
 
 class Circuit(object):
     """
@@ -41,18 +48,24 @@ class Circuit(object):
                     'rid': 'None',
                     'type': 'neuron'}
 
-    def __init__(self, name='', dtype=np.float64, experiment_name=''):
+    def __init__(self, name='', dtype=np.float64, experiment_name='', config=None):
         self.G = nx.MultiDiGraph()  # Neurokernel graph definition
-        self.config = SimConfig(duration=None, steps=None,
-                                dt=1e-4, t=None, device=0)
+        if config is not None:
+            if isinstance(config, dict):
+                self.config = SimConfig(**config)
+            elif isinstance(config, SimConfig):
+                self.config = config
+            else:
+                self.config = None
+        else:
+            self.config = None
+
         self.node_ids = []  # Graph ID's
         self.tracked_variables = []  # Observable variables in circuit
         self._inputs = None  # input nodes
-#        self._outputs = None # output nodes
-#        self.experiment_config = []
+        self._outputs = None # output nodes
         self.experiment_name = experiment_name
         self.dtype = dtype
-#        self.ICs = []
         self.name = name
         self.manager = None  # LPU Manager
         self.logger = None # logger
