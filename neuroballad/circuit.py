@@ -10,10 +10,10 @@ import numpy as np
 import networkx as nx
 from neurokernel.tools.logging import setup_logger
 from neuroballad.models.element import Element, Input
+from .visualizer import visualize_circuit, visualize_video
 
 SimConfig = namedtuple('SimConfig',
                        ['dt', 'duration', 'steps', 't', 'device'])
-
 
 class Circuit(object):
     """
@@ -21,7 +21,7 @@ class Circuit(object):
 
     Basic Example
     --------
-    >>> from neuroballad import * #Import Neuroballad
+    >>>  from neuroballad import * #Import Neuroballad
     >>> C.add([0, 2, 4], HodgkinHuxley()) #Create three neurons
     >>> C.add([1, 3, 5], AlphaSynapse()) #Create three synapses
     >>> C.join([[0,1],[1,2],[2,3],[3,4],[4,5],[5,0]]) #Join nodes together
@@ -43,7 +43,6 @@ class Circuit(object):
 
     def __init__(self, name='', dtype=np.float64, experiment_name=''):
         self.G = nx.MultiDiGraph()  # Neurokernel graph definition
-        results = {}  # Simulation results
         self.config = SimConfig(duration=None, steps=None,
                                 dt=1e-4, t=None, device=0)
         self.node_ids = []  # Graph ID's
@@ -74,19 +73,12 @@ class Circuit(object):
             self.node_ids[i][1] = experiment_name
 
     def get_new_id(self):
-        """
-        Densely connects two arrays of circuit ID's.
-
-        Example
-        --------
-        >>> C.dense_connect_variable(cluster_a, cluster_b)
+        """Generate new ID
         """
         if self.node_ids == []:
             return '1'
         else:
             return str(len(self.node_ids)+1)
-        # return next(filter(set(self.node_ids).__contains__, \
-        #            itertools.count(0)))
 
     @property
     def nodes(self):
@@ -125,7 +117,7 @@ class Circuit(object):
                         pass
                     else:
                         skip = True
-            if skip == False:
+            if not skip:
                 output.append(i)
         return output
 
@@ -503,110 +495,22 @@ class Circuit(object):
         >>> C.collect_results()
         """
         import neurokernel.LPU.utils.visualizer as vis
-        self.V = vis.visualizer()
-        self.V.add_LPU('neuroballad_temp_model_output.h5',
+        self.Viz = vis.visualizer()
+        self.Viz.add_LPU('neuroballad_temp_model_output.h5',
                        gexf_file='neuroballad_temp_model.gexf.gz', LPU='lpu')
-        # print([self.V._uids['lpu']['V']])
 
-    def visualize_video(self, name, config={}, visualization_variable='V',
-                        out_name='test.avi'):
-        """
-        Visualizes all ID's using a set visualization variable over time,
-        saving them to a video file.
-
-        Example
-        --------
-        >>> C.visualize_video([0, 2, 4], out_name='visualization.avi')
-        """
-        uids = []
-        if config == {}:
-            config = {'variable': visualization_variable, 'type': 'waveform',
-                      'uids': [self.V._uids['lpu'][visualization_variable]]}
-        for i in name:
-            uids.append(i)
-        config['uids'] = uids
-        self.V.codec = 'mpeg4'
-        self.V.add_plot(config, 'lpu')
-        self.V.update_interval = 1e-4
-        self.V.out_filename = out_name
-        self.V.run()
 
     def visualize_circuit(self, prog='dot', splines='line',
-                          filename='neuroballad_temp_circuit.svg',
-                          maxiter=10000):
-        styles = {
-            'graph': {
-                'label': self.name,
-                # 'fontname': 'LM Roman 10',
-                'fontsize': '16',
-                'fontcolor': 'black',
-                # 'bgcolor': '#333333',
-                # 'rankdir': 'LR',
-                'splines': splines,
-                'model': 'circuit',
-                'size': '250,250',
-                'overlap': 'false',
-            },
-            'nodes': {
-                # 'fontname': 'LM Roman 10',
-                'shape': 'box',
-                'fontcolor': 'black',
-                'color': 'black',
-                'style': 'rounded',
-                'fillcolor': '#006699',
-                # 'nodesep': '1.5',
-            },
-            'edges': {
-                'style': 'solid',
-                'color': 'black',
-                'arrowhead': 'open',
-                'arrowsize': '0.5',
-                'fontname': 'Courier',
-                'fontsize': '12',
-                'fontcolor': 'black',
-                'splines': 'ortho',
-                'concentrate': 'false',
-            }
-        }
-        import matplotlib
-        matplotlib.use('agg')
-        import matplotlib.pyplot as plt
-        G = self.G
-        classnames = list(
-            set([item for key, item in nx.get_node_attributes(G, 'class').items()]))
-        colors = plt.cm.get_cmap('Spectral', len(classnames))
-        # G.remove_nodes_from(nx.isolates(G))
-        mapping = {}
-        node_types = set()
-        for n, d in G.nodes(data=True):
-            node_types.add(d['name'].rstrip('1234567890'))
-        node_nos = dict.fromkeys(node_types, 1)
-        for n, d in G.nodes(data=True):
-            node_type = d['name'].rstrip('1234567890')
-            mapping[n] = d['name'].rstrip(
-                '1234567890') + str(node_nos[node_type])
-            node_nos[node_type] += 1
-        G = nx.relabel_nodes(G, mapping)
-        A = nx.drawing.nx_agraph.to_agraph(G)
-        #A.graph_attr['fontname']= 'LM Roman 10'
-        #A.graph_attr['splines'] = 'ortho'
-        # A.graph_attr['bgcolor'] = '#333333'
-        A.graph_attr.update(styles['graph'])
-        A.write('file.dot')
-        for i in A.edges():
-            e = A.get_edge(i[0], i[1])
-            #e.attr['splines'] = 'ortho'
-            e.attr.update(styles['edges'])
-            e.attr.update(label=e.attr['variable'])
-            if i[0][:-1] == 'Repressor':
-                e.attr['arrowhead'] = 'tee'
-        for i in A.nodes():
-            n = A.get_node(i)
-            #n.attr['shape'] = 'box'
-            n.attr.update(styles['nodes'])
-            c = colors(classnames.index(n.attr['class']))
-            n.attr.update(style='rounded,filled',
-                          fillcolor=matplotlib.colors.rgb2hex(c))
-        A.layout(prog=prog, args='-Emaxiter={}'.format(maxiter))
-        A.draw(filename)
-        return A
+                      filename='neuroballad_temp_circuit.svg'): 
+        return visualize_circuit(self,
+                                 prog=prog,
+                                 splines=splines,
+                                 filename=filename)
+
+    def visualize_video(self, name, config={}, visualization_variable='V',
+                    out_name='test.avi'):
+        visualize_video(self,
+                        name=name,
+                        config=config,
+                        visualization_variable=visualization_variable,
+                        out_name=out_name)
