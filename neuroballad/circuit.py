@@ -48,18 +48,9 @@ class Circuit(object):
                     'rid': 'None',
                     'type': 'neuron'}
 
-    def __init__(self, name='', dtype=np.float64, experiment_name='', config=None):
+    def __init__(self, name='', dtype=np.float64, experiment_name=''):
         self.G = nx.MultiDiGraph()  # Neurokernel graph definition
-        if config is not None:
-            if isinstance(config, dict):
-                self.config = SimConfig(**config)
-            elif isinstance(config, SimConfig):
-                self.config = config
-            else:
-                self.config = None
-        else:
-            self.config = None
-
+        self.config = None # specified at compile time
         self.node_ids = []  # Graph ID's
         self.tracked_variables = []  # Observable variables in circuit
         self._inputs = None  # input nodes
@@ -326,7 +317,7 @@ class Circuit(object):
         """
         nx.write_gexf(self.G, file_name)
 
-    def compile(self, duration, dt=None, steps=None, in_list=None,
+    def compile(self, duration, dt=None, in_list=None, steps=None,
                 record=('V', 'spike_state', 'I'), extra_comps=None,
                 input_filename='neuroballad_temp_model_input.h5',
                 output_filename='neuroballad_temp_model_output.h5',
@@ -344,11 +335,12 @@ class Circuit(object):
                 dt = t[1] - t[0]
             else:
                 raise ValueError('dt and step cannot both be None')
-        self.config = self.config._replace(duration=duration,
-                                           steps=steps,
-                                           dt=dt,
-                                           t=t,
-                                           device=device)
+        
+        self.config = SimConfig(duration=duration,
+                                steps=steps,
+                                dt=dt,
+                                t=t,
+                                device=device)
         # compile inputs
         if in_list is None:
             in_list = self._inputs
@@ -444,7 +436,7 @@ class Circuit(object):
 #        self.input.status = 'pre_run'
 #        self.output.status = 'pre_run'
 
-    def sim(self, duration, dt, steps=None, in_list=None,
+    def sim(self, duration, dt, in_list=None, steps=None,
             record=('V', 'spike_state', 'I'), log=None,
             device=0, sample_interval=1,
             input_filename='neuroballad_temp_model_input.h5',
