@@ -15,6 +15,6 @@ class LeakyIAF(Element):
     states = {'initV': 10001.}
     params = {'resting_potential': 0., 
               'reset_potential': 0., 
-              'threshold': 1.0, 
-              'capacitance': 0., 
-              'resistance': 0.}
+              'threshold': 1., 
+              'capacitance': 1e-1, 
+              'resistance': 1e3}
