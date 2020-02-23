@@ -67,18 +67,19 @@ class Circuit(object):
     def encode_name(self, i, experiment_name=None):
         '''Encode node id into json format
         '''
-        i = str(i)
-        try:
-            i = i.decode('ascii')
-        except Exception as e:
-            pass
-            # TODO: use raise ValueError('ASCII decode failed for {}, error {}'.format(i, e))
-        if experiment_name is None:
-            experiment_name = self.experiment_name
+        return str(i)
+        # i = str(i)
+        # try:
+        #     i = i.decode('ascii')
+        # except Exception as e:
+        #     pass
+        #     # TODO: use raise ValueError('ASCII decode failed for {}, error {}'.format(i, e))
+        # if experiment_name is None:
+        #     experiment_name = self.experiment_name
 
-        name_dict = {'name': str(i), 'exp': experiment_name}
-        name = self.tags_to_json(name_dict)
-        return name
+        # name_dict = {'name': str(i), 'exp': experiment_name}
+        # name = self.tags_to_json(name_dict)
+        # return name
 
     def get_new_id(self):
         """Generate new ID

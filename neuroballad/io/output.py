@@ -157,7 +157,7 @@ class Output(IO):
             for var_idx, var in enumerate(data.keys()):
                 _ax = axes[var_idx] if len(data) > 1 else axes
                 if var == 'spike_state':
-                    raster(data[var], ax=_ax, colors=cmap)
+                    _ax = raster(data[var], ax=_ax, colors=cmap)
                 else:
                     for idx, (node, var_val) in enumerate(data[var].items()):
                         _ax.plot(self.t[var], var_val, label=node, color=colors[idx])
