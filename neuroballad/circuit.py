@@ -9,7 +9,6 @@ from collections import namedtuple
 import h5py
 import numpy as np
 import networkx as nx
-from neurokernel.tools.logging import setup_logger
 
 from .models.element import Element, Input
 from . import io
@@ -216,13 +215,13 @@ class Circuit(object):
         # print(in_array)
         for i in range(in_array.shape[0]):
             if variable is None:
-                self.G.add_edge(self.encode_name(str(in_array[i, 0])),
-                                self.encode_name(str(in_array[i, 1])),
+                self.G.add_edge(self.encode_name(str(in_array[i, 0]), self.experiment_name),
+                                self.encode_name(str(in_array[i, 1]), self.experiment_name),
                                 delay=delay,
                                 tag=tag)
             else:
-                self.G.add_edge(self.encode_name(str(in_array[i, 0])),
-                                self.encode_name(str(in_array[i, 1])),
+                self.G.add_edge(self.encode_name(str(in_array[i, 0]), self.experiment_name),
+                                self.encode_name(str(in_array[i, 1]), self.experiment_name),
                                 delay=delay,
                                 variable=variable,
                                 tag=tag)
@@ -339,6 +338,42 @@ class Circuit(object):
         if graph_filename is not None:
             nx.write_gexf(self.G, graph_filename)
 
+    def sim(self, duration, dt, in_list=None, steps=None,
+            record=('V', 'spike_state', 'I'), log=None,
+            device=0, sample_interval=1,
+            input_filename='neuroballad_temp_model_input.h5',
+            output_filename='neuroballad_temp_model_output.h5',
+            graph_filename='neuroballand_temp_graph.gexf.gz',
+            log_filename='neuroballand_temp_log.log',
+            extra_comps=None, preamble=[], args=[]):
+        """
+        Simulates the circuit for a set amount of time, with a fixed temporal
+        step size and a list of inputs.
+
+        TODO
+        ----
+        1. use preamble and args for slurm
+
+        Example
+        --------
+        >>> C.sim(1., 1e-4, InIStep(0, 10., 1., 2.))
+        """
+        self.compile(duration, dt, steps=steps,
+                     in_list=in_list, record=record, extra_comps=extra_comps,
+                     input_filename=input_filename, output_filename=output_filename,
+                     graph_filename=graph_filename,
+                     device=device, sample_interval=sample_interval)
+
+        from neurokernel.tools.logging import setup_logger
+        if log is not None:
+            screen = False
+            file_name = None
+            if log.lower() in ['file', 'both']:
+                file_name = log_filename
+            if log.lower() in ['screen', 'both']:
+                screen = True
+            self.logger = setup_logger(file_name=file_name, screen=screen)
+
         from neurokernel.core_gpu import Manager
         from neurokernel.LPU.LPU import LPU
         from neurokernel.LPU.InputProcessors.FileInputProcessor import  \
@@ -360,42 +395,6 @@ class Circuit(object):
                          output_processors=[output_processor],
                          debug=False,
                          extra_comps=extra_comps if extra_comps is not None else [])
-       
-
-    def sim(self, duration, dt, in_list=None, steps=None,
-            record=('V', 'spike_state', 'I'), log=None,
-            device=0, sample_interval=1,
-            input_filename='neuroballad_temp_model_input.h5',
-            output_filename='neuroballad_temp_model_output.h5',
-            graph_filename='neuroballand_temp_graph.gexf.gz',
-            log_filename='neuroballand_temp_log.log',
-            extra_comps=None, preamble=[], args=[]):
-        """
-        Simulates the circuit for a set amount of time, with a fixed temporal
-        step size and a list of inputs.
-
-        TODO
-        ----
-        1. use preamble and args for slurm
-
-        Example
-        --------
-        >>> C.sim(1., 1e-4, InIStep(0, 10., 1., 2.))
-        """
-        if log is not None:
-            screen = False
-            file_name = None
-            if log.lower() in ['file', 'both']:
-                file_name = log_filename
-            if log.lower() in ['screen', 'both']:
-                screen = True
-            self.logger = setup_logger(file_name=file_name, screen=screen)
-
-        self.compile(duration, dt, steps=steps,
-                     in_list=in_list, record=record, extra_comps=extra_comps,
-                     input_filename=input_filename, output_filename=output_filename,
-                     graph_filename=graph_filename,
-                     device=device, sample_interval=sample_interval)
 
         import neurokernel.mpi_relaunch
         self.manager.spawn()
