@@ -23,6 +23,6 @@ for n, _id in enumerate(neuron_ids):
 
 C.sim(duration=1., dt=1e-4, in_list=C_in, record=('I', 'g', 'V', 'spike_state'), log='screen', graph_filename=None) #Use the three inputs and simulate
 
-C.input.plot(neuron_ids, fig_filename='test_in.png')
-C.output.plot(neuron_ids, fig_filename='test_out_neurons.png')
-C.output.plot(synapse_ids, fig_filename='test_out_synapses.png')
+C.input.plot([C.encode_name(n) for n in neuron_ids], fig_filename='test_in.png')
+C.output.plot([C.encode_name(n) for n in neuron_ids], fig_filename='test_out_neurons.png')
+C.output.plot([C.encode_name(n) for n in synapse_ids], fig_filename='test_out_synapses.png')
