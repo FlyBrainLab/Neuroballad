@@ -3,6 +3,7 @@
 This class handles io for reading/writing input/output h5 files 
 for simulating a NeuroDriver session.
 '''
+import logging
 from abc import abstractmethod
 from pathlib import Path
 import atexit
@@ -26,7 +27,16 @@ class IO(object):
         @atexit.register
         def close_everything():
             if isinstance(self.file_handle, h5py.File):
+                if self.isopen:
+                    self.file_handle.flush()
                 self.file_handle.close()
+
+        try:
+            self.open(mode='w')
+            self.close()
+        except Exception as e:
+            self.close()
+            logging.exception('Test file opening failed, aborting: {}'.format(e))
 
     @property
     def path(self):
@@ -48,7 +58,7 @@ class IO(object):
                 raise TypeError('file_handle of type {} not understood'.format(type(self.file_handle)))
         return False
 
-    def open(self, mode='r'):
+    def open(self, mode='a'):
         '''open file for reading
         
         if not open then open
@@ -73,6 +83,8 @@ class IO(object):
             handle to h5py file object
         '''
         if self.file_handle is not None:
+            if self.isopen:
+                self.file_handle.flush()
             self.file_handle.close()
         return self.file_handle
 
