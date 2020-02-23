@@ -18,5 +18,5 @@ C_in_c = InIStep(node_id=neuron_ids[0], I_val=40., t_start=0.60, t_end=0.80) #Cr
 #C.compile(duration=1., dt=1e-4, in_list=[C_in_a, C_in_b, C_in_c])
 C.sim(duration=1., dt=1e-4, in_list=[C_in_a, C_in_b, C_in_c], log='screen') #Use the three inputs and simulate
 
-C.input.plot(neuron_ids, fig_filename='test_in.png')
-C.output.plot(neuron_ids, fig_filename='test_out.png')
+#C.input.plot(neuron_ids, fig_filename='test_in.png')
+#C.output.plot(neuron_ids, fig_filename='test_out.png')

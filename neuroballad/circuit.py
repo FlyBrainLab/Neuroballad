@@ -15,6 +15,7 @@ from .models.element import Element, Input
 from . import io
 from .visualizer import visualize_circuit, visualize_video
 
+
 @dataclasses.dataclass
 class SimConfig:
     dt: float = 1e-4
@@ -22,6 +23,7 @@ class SimConfig:
     steps: int = None
     t: np.ndarray = None
     device: int = 0
+
 
 class Circuit(object):
     """
@@ -52,10 +54,9 @@ class Circuit(object):
     def __init__(self, name='', dtype=np.float64, experiment_name=''):
         self.G = nx.MultiDiGraph()  # Neurokernel graph definition
         self.config = None # specified at compile time
-        self.node_ids = []  # Graph ID's<
+        self.node_ids = []  # Graph ID's
         self.tracked_variables = []  # Observable variables in circuit
         self._inputs = None  # input nodes
-        self._outputs = None # output nodes
         self.input = None # io.Input instance
         self.output = None # io.Output instance
         self.experiment_name = experiment_name
@@ -63,82 +64,6 @@ class Circuit(object):
         self.name = name
         self.manager = None  # LPU Manager
         self.logger = None # logger
-
-    def set_experiment(self, experiment_name):
-        self.experiment_name = experiment_name
-        Gc = copy.deepcopy(self.G)
-        mapping = {}
-        for i in self.G.nodes():
-            ii = self.json_to_tags(i)
-            ii['experiment_name'] = experiment_name
-            mapping[i] = self.tags_to_json(ii)
-        Gc = nx.relabel_nodes(Gc, mapping)
-        self.G = Gc
-        for i, val in self.G.nodes(data=True):
-            val['name'] = i
-        for i in range(len(self.node_ids)):
-            self.node_ids[i][1] = experiment_name
-
-    def get_new_id(self):
-        """Generate new ID
-        """
-        if self.node_ids == []:
-            return '1'
-        else:
-            return str(len(self.node_ids)+1)
-
-    @property
-    def nodes(self):
-        return self.G.nodes
-
-    def copy(self):
-        '''Return Copy of Circuit Instance'''
-        return copy.deepcopy(self)
-
-    def merge(self, C):
-        '''Merge circuit `C` with current circuit'''
-        self.G = nx.compose(self.G, C.G)
-        self.node_ids += C.node_ids
-
-    def find_neurons(self, **tags_tofind):
-        tags_tofind['type'] = 'neuron'
-        return self.filter_nodes_by_tags(tags_tofind)
-
-    def find_synapses(self, **tags_tofind):
-        tags_tofind['type'] = 'synapse'
-        return self.filter_nodes_by_tags(tags_tofind)
-
-    def find_ports(self, **tags_tofind):
-        tags_tofind['type'] = 'port'
-        return self.filter_nodes_by_tags(tags_tofind)
-
-    def filter_nodes_by_tags(self, tags_tofind):
-        output = []
-        for i, val in self.G.nodes(data=True):
-            skip = False
-            for j in tags_tofind.keys():
-                if j not in val:
-                    skip = True
-                else:
-                    if tags_tofind[j] in val[j]:
-                        pass
-                    else:
-                        skip = True
-            if not skip:
-                output.append(i)
-        return output
-
-    def tags_to_json(self, tags):
-        """
-        Turns the tags dictionary to a JSON string.
-        """
-        return json.dumps(tags)
-
-    def json_to_tags(self, tags_str):
-        """
-        Turns a tags JSON string to the dictionary.
-        """
-        return json.loads(tags_str)
 
     def encode_name(self, i, experiment_name=None):
         '''Encode node id into json format
@@ -156,6 +81,23 @@ class Circuit(object):
         # name_dict = {'name': str(i), 'exp': experiment_name}
         # name = self.tags_to_json(name_dict)
         # return name
+
+    def get_new_id(self):
+        """Generate new ID
+        """
+        if self.node_ids == []:
+            return '1'
+        else:
+            return str(len(self.node_ids)+1)
+
+    def copy(self):
+        '''Return Copy of Circuit Instance'''
+        return copy.deepcopy(self)
+
+    def merge(self, C):
+        '''Merge circuit `C` with current circuit'''
+        self.G = nx.compose(self.G, C.G)
+        self.node_ids += C.node_ids
 
     def add(self, name, neuron):
         """
@@ -507,3 +449,58 @@ class Circuit(object):
                         config=config,
                         visualization_variable=visualization_variable,
                         out_name=out_name)
+
+    def set_experiment(self, experiment_name):
+        self.experiment_name = experiment_name
+        Gc = copy.deepcopy(self.G)
+        mapping = {}
+        for i in self.G.nodes():
+            ii = self.json_to_tags(i)
+            ii['experiment_name'] = experiment_name
+            mapping[i] = self.tags_to_json(ii)
+        Gc = nx.relabel_nodes(Gc, mapping)
+        self.G = Gc
+        for i, val in self.G.nodes(data=True):
+            val['name'] = i
+        for i in range(len(self.node_ids)):
+            self.node_ids[i][1] = experiment_name
+
+    def find_neurons(self, **tags_tofind):
+        tags_tofind['type'] = 'neuron'
+        return self.filter_nodes_by_tags(tags_tofind)
+
+    def find_synapses(self, **tags_tofind):
+        tags_tofind['type'] = 'synapse'
+        return self.filter_nodes_by_tags(tags_tofind)
+
+    def find_ports(self, **tags_tofind):
+        tags_tofind['type'] = 'port'
+        return self.filter_nodes_by_tags(tags_tofind)
+
+    def filter_nodes_by_tags(self, tags_tofind):
+        output = []
+        for i, val in self.G.nodes(data=True):
+            skip = False
+            for j in tags_tofind.keys():
+                if j not in val:
+                    skip = True
+                else:
+                    if tags_tofind[j] in val[j]:
+                        pass
+                    else:
+                        skip = True
+            if not skip:
+                output.append(i)
+        return output
+
+    def tags_to_json(self, tags):
+        """
+        Turns the tags dictionary to a JSON string.
+        """
+        return json.dumps(tags)
+
+    def json_to_tags(self, tags_str):
+        """
+        Turns a tags JSON string to the dictionary.
+        """
+        return json.loads(tags_str)
