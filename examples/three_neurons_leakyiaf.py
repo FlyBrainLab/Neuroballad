@@ -1,14 +1,14 @@
-from neuroballad import * #Import Neuroballad
+from neuroballad import LeakyIAF, AlphaSynapse, Circuit, InIStep
 C = Circuit() #Create a circuit
-C.add([0, 2, 4], LeakyIAF()) #Create three neurons
-C.add([1, 3, 5], AlphaSynapse()) #Create three synapses
-C.join([[0,1],[1,2],[2,3],[3,4]]) #Join nodes together
+neuron_ids = C.add_cluster(3, LeakyIAF(), name='iaf') #Create three neurons
+synapse_ids = C.add_cluster(3, AlphaSynapse(), name='alpha') #Create three synapses
+C.join(list(zip(neuron_ids, synapse_ids))) #Join nodes together
 
-C_in_a = InIStep(0, 40., 0.20, 0.40) #Create current input for node 0
-C_in_b = InIStep(2, 40., 0.40, 0.60) #Create current input for node 2
-C_in_c = InIStep(4, 40., 0.60, 0.80) #Create current input for node 4
-C.sim(1., 1e-4, [C_in_a, C_in_b, C_in_c]) #Use the three inputs and simulate
-#C.plot(0) #Plot the first neuron
-sim_results = C.collect_results() #Get simulation results
-C.visualize_video([0, 2, 4]) #Visualize the neurons into a video
-#C.calculate_2d_layout() #Calculate a 2D Layout for circuit visualization
+C_in_a = InIStep(neuron_ids[0], 40., 0.20, 0.40) #Create current input for node 0
+C_in_b = InIStep(neuron_ids[1], 40., 0.40, 0.60) #Create current input for node 2
+C_in_c = InIStep(neuron_ids[2], 40., 0.60, 0.80) #Create current input for node 4
+C.compile(duration=1., dt=1e-4, in_list=[C_in_a, C_in_b, C_in_c])
+C.sim(1., 1e-4, [C_in_a, C_in_b, C_in_c], log='none') #Use the three inputs and simulate
+
+C.input.plot(neuron_ids, fig_filename='test_in.png')
+C.output.plot(neuron_ids, fig_filename='test_out.png')

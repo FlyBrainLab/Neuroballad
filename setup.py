@@ -10,4 +10,13 @@ setup(name='Neuroballad',
       url='',
       download_url='',
       license='BSD-3-Clause',
-      packages=find_packages())
+      packages=find_packages(),
+      install_requires=[
+          "networkx<=2.3",
+          "pygraphviz",
+          "tqdm",
+          "pycuda",
+          "numpy",
+          "matplotlib",
+          # "neurokernel"
+      ])

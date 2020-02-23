@@ -23,8 +23,8 @@ def visualize_video(C, name, config={}, visualization_variable='V',
     C.Viz.out_filename = out_name
     C.Viz.run()
 
-def visualize_circuit(C, prog='dot', splines='line',
-                      filename='neuroballad_temp_circuit.svg'): 
+def visualize_circuit(C, prog='dot', splines='line', view=False,
+                      filename='neuroballad_temp_circuit.svg', format='svg'): 
     '''Visualize Circuit as Graph
     
     Parameters
@@ -111,5 +111,8 @@ def visualize_circuit(C, prog='dot', splines='line',
         n.attr.update(style='rounded,filled',
                       fillcolor=matplotlib.colors.rgb2hex(c))
     A.layout(prog=prog)
-    A.draw(filename)
+    if filename is not None:
+        A.draw(filename, format=format)
+    if view:
+        return A.draw(None, format=format)
     return A

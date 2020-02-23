@@ -16,32 +16,34 @@ from .io import IO
 from ..utils import raster, PSTH
 
 class Input(IO):
-    def __init__(self, filename: str, data: tp.Dict, dt: tp.Union[np.float, tp.Any]=None, base_dir: str='./'):
+    def __init__(self, filename: str, uids: tp.Dict, data: tp.Dict,
+                 dt: tp.Union[np.float, tp.Any]=None, base_dir: str='./'):
         '''
-        data = {variable:{
-                 uids: []
-                 data: []
+        data = {variable:{[]
+        }
+        uids = {variable:[]
         }
         '''
         super().__init__(filename, base_dir=base_dir)
 
-        # coerce uids to be type 'S' as per required by h5 format
-        for v in data:
-            data[v]['uids'] = np.array(data[v]['uids'], dtype='S')
+        uids = dict(uids)
+        for v in uids:
+            uids[v] = np.array(uids[v], dtype=str)
 
         self.vars = list(data.keys())
-        self.uids = {v:data[v]['uids'].astype(str) for v in self.vars}
-        self.shapes = {v:data[v]['data'].shape for v in self.vars}
+        self.uids = uids
+        self.shapes = {v:data[v].shape for v in self.vars}
         if dt is None:
             self.dt = 1
         else:
+            assert np.isscalar(dt)
             self.dt = dt
         self.t = {v:np.arange(self.shapes[v][0])*dt for v in self.vars}
 
         with h5py.File(self.path, 'w') as f:
             for var in self.vars:
-                _uids = np.array(data[var]['uids'], dtype='S')
-                _data = data[var]['data']
+                _uids = self.uids[var].astype('S')         # coerce uids to be type 'S' as per required by h5 format
+                _data = data[var]
                 f.create_dataset('{}/uids'.format(var),
                                  data=_uids)
                 f.create_dataset('{}/data'.format(var),
@@ -57,11 +59,11 @@ class Input(IO):
             vars = np.atleast_1d(vars)
             for v in vars:
                 if v not in self.vars:
-                    raise ValueErorr("Desired vars {} not found in output file vars{}".format(
+                    raise ValueError("Desired vars {} not found in output file vars{}".format(
                         vars, self.vars))
-                for n in node_ids:
+                for n in nodes_ids:
                     if n not in self.uids[v]:
-                        raise ValueErorr("Desired var {} of node {} not found".format(
+                        raise ValueError("Desired var {} of node {} not found".format(
                             v, n))
 
 
@@ -161,7 +163,7 @@ class Input(IO):
                     vals = []
                     labels = []
                     for idx, (node, var_val) in enumerate(data[var].items()):
-                        vals.append(var_val[:, np.newaxis])
+                        vals.append(var_val)
                         labels.append(node)
                     vals = np.concatenate(vals, axis=-1)
                     fmt = lambda x, pos: '%.2f' % (float(x)*self.dt)
@@ -176,6 +178,6 @@ class Input(IO):
                         _ax.set_yticklabels(labels)
                     plt.colorbar(ax=_ax, mappable=im)
                     _ax.set_title("{} - {}".format(self.filename, var))
-        if savefig:
-            fig.savefig(os.path.join(RES_DIR, 'output_' + self.filename.split('.h5')[0]+'.png'), dpi=300)
+        if fig_filename is not None:
+            fig.savefig(self.base_dir / fig_filename)
         return fig, axes

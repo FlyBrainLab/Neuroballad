@@ -12,6 +12,7 @@ import networkx as nx
 from neurokernel.tools.logging import setup_logger
 
 from .models.element import Element, Input
+from . import io
 from .visualizer import visualize_circuit, visualize_video
 
 @dataclasses.dataclass
@@ -51,10 +52,12 @@ class Circuit(object):
     def __init__(self, name='', dtype=np.float64, experiment_name=''):
         self.G = nx.MultiDiGraph()  # Neurokernel graph definition
         self.config = None # specified at compile time
-        self.node_ids = []  # Graph ID's
+        self.node_ids = []  # Graph ID's<
         self.tracked_variables = []  # Observable variables in circuit
         self._inputs = None  # input nodes
         self._outputs = None # output nodes
+        self.input = None # io.Input instance
+        self.output = None # io.Output instance
         self.experiment_name = experiment_name
         self.dtype = dtype
         self.name = name
@@ -139,25 +142,20 @@ class Circuit(object):
 
     def encode_name(self, i, experiment_name=None):
         '''Encode node id into json format
-
-        Example
-        -------
-        >>> a = C.encode_name(0, experiment_name='test')
-        >>> a
-        '{"name": "0", "experiment_name": "test"}'
         '''
-        i = str(i)
-        try:
-            i = i.decode('ascii')
-        except Exception as e:
-            pass
-            # TODO: use raise ValueError('ASCII decode failed for {}, error {}'.format(i, e))
-        if experiment_name is None:
-            experiment_name = self.experiment_name
+        return i
+        # i = str(i)
+        # try:
+        #     i = i.decode('ascii')
+        # except Exception as e:
+        #     pass
+        #     # TODO: use raise ValueError('ASCII decode failed for {}, error {}'.format(i, e))
+        # if experiment_name is None:
+        #     experiment_name = self.experiment_name
 
-        name_dict = {'name': str(i), 'exp': experiment_name}
-        name = self.tags_to_json(name_dict)
-        return name
+        # name_dict = {'name': str(i), 'exp': experiment_name}
+        # name = self.tags_to_json(name_dict)
+        # return name
 
     def add(self, name, neuron):
         """
@@ -335,7 +333,6 @@ class Circuit(object):
                 dt = t[1] - t[0]
             else:
                 raise ValueError('dt and step cannot both be None')
-        
         self.config = SimConfig(duration=duration,
                                 steps=steps,
                                 dt=dt,
@@ -344,6 +341,7 @@ class Circuit(object):
         # compile inputs
         if in_list is None:
             in_list = self._inputs
+
         uids = []
         for i in in_list:
             uids.append(self.encode_name(str(i.node_id),
@@ -392,39 +390,26 @@ class Circuit(object):
             else:
                 Is[i.var] = i.add(self, Inodes[i.var], Is[i.var], t, var=i.var)
 
-        with h5py.File(input_filename, 'w') as f:
-            for i in input_vars:
-                # print(i + '/uids')
-                i_nodes = Inodes[i]
-                """
-                try:
-                    i_nodes = [i.decode('ascii') for i in i_nodes]
-                except:
-                    pass
-                i_nodes = [self.encode_name(i) for i in i_nodes]
-                """
-                i_nodes = np.array(i_nodes, dtype='S')
-                f.create_dataset(i + '/uids', data=i_nodes)
-                f.create_dataset(i + '/data', (self.config.steps, len(Inodes[i])),
-                                 dtype=self.dtype,
-                                 data=Is[i])
-
+        self.input = io.Input(input_filename, uids=Inodes, data=Is, dt=self.config.dt)
+        self.output = io.Output(output_filename, uids={i:None for i in record})
+        self.input.status = 'pre_run'
+        self.output.status = 'pre_run'
         if graph_filename is not None:
             nx.write_gexf(self.G, graph_filename)
 
         from neurokernel.core_gpu import Manager
         from neurokernel.LPU.LPU import LPU
-        import neurokernel.mpi_relaunch
         from neurokernel.LPU.InputProcessors.FileInputProcessor import  \
             FileInputProcessor
         from neurokernel.LPU.OutputProcessors.FileOutputProcessor import \
             FileOutputProcessor
 
-        input_processor = FileInputProcessor(input_filename)
+        input_processor = FileInputProcessor(self.input.path)
         (comp_dict, conns) = LPU.graph_to_dicts(self.G)
-        output_processor = FileOutputProcessor([(i, None) for i in list(record)],
-                                               output_filename,
+        output_processor = FileOutputProcessor(self.output.var_list,
+                                               self.output.path,
                                                sample_interval=sample_interval)
+
         self.manager = Manager()
         self.manager.add(LPU, self.experiment_name, self.config.dt,
                          comp_dict, conns,
@@ -433,8 +418,7 @@ class Circuit(object):
                          output_processors=[output_processor],
                          debug=False,
                          extra_comps=extra_comps if extra_comps is not None else [])
-#        self.input.status = 'pre_run'
-#        self.output.status = 'pre_run'
+       
 
     def sim(self, duration, dt, in_list=None, steps=None,
             record=('V', 'spike_state', 'I'), log=None,
@@ -470,20 +454,24 @@ class Circuit(object):
                      input_filename=input_filename, output_filename=output_filename,
                      graph_filename=graph_filename,
                      device=device, sample_interval=sample_interval)
+
+        import neurokernel.mpi_relaunch
         self.manager.spawn()
         self.manager.start(self.config.steps)
         self.manager.wait()
+        self.input.status = 'run'
+        self.output.status = 'run'
 
     def collect(self):
         data = {'in': {}, 'out': {}}
         uids = {'in': {}, 'out': {}}
         time.sleep(1.)
-        with h5py.File('neuroballad_temp_model_input.h5', 'r') as f:
+        with h5py.File(self.input.path, 'r') as f:
             for k in f.keys():
                 data['in'][k] = f[k]['data']
                 uids['in'][k] = f[k]['uids'].astype(str)
 
-        with h5py.File('neuroballad_temp_model_output.h5', 'r') as f:
+        with h5py.File(self.output.path, 'r') as f:
             for k in f.keys():
                 if k != 'metadata':
                     data['out'][k] = f[k]['data'][()]
@@ -501,16 +489,16 @@ class Circuit(object):
         """
         import neurokernel.LPU.utils.visualizer as vis
         self.Viz = vis.visualizer()
-        self.Viz.add_LPU('neuroballad_temp_model_output.h5',
-                       gexf_file='neuroballad_temp_model.gexf.gz', LPU='lpu')
+        self.Viz.add_LPU(self.output.path,
+                         gexf_file='neuroballad_temp_model.gexf.gz',
+                         LPU='lpu')
 
 
-    def visualize_circuit(self, prog='dot', splines='line',
-                      filename='neuroballad_temp_circuit.svg'): 
-        return visualize_circuit(self,
-                                 prog=prog,
-                                 splines=splines,
-                                 filename=filename)
+
+    def visualize_circuit(self, prog='dot', splines='line', view=False,
+                      filename='neuroballad_temp_circuit.svg', format='svg'):
+        return visualize_circuit(self, prog=prog, splines=splines, view=view,
+                                 filename=filename, format=format)
 
     def visualize_video(self, name, config={}, visualization_variable='V',
                     out_name='test.avi'):

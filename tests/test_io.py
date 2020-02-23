@@ -7,25 +7,21 @@ from neuroballad.io import IO, Input, Output
 from pathlib import Path
 dt = 1e-4
 INPUT_DATA = OrderedDict(
-    I={
-        'uids':['0', '1', '2', '3'],
-        'data':np.random.randn(1000, 4)
-    },
-    g={
-        'uids':['0', '1', '2'],
-        'data':np.random.randn(1000, 3)
-    }
+    I=np.random.randn(1000, 4),
+    g=np.random.randn(1000, 3)
+)
+INPUT_UIDS = OrderedDict(
+    I=['0', '1', '2', '3'],
+    g=['0', '1', '2']
 )
 
 OUTPUT_DATA = OrderedDict(
-    V={
-        'uids':['0', '1', '2', '3'],
-        'data':np.random.randn(1000, 4)
-    },
-    spike_state={
-        'uids':['0', '1', '2'],
-        'data':np.random.randint(2, size=(1000, 3))
-    }
+    V=np.random.randn(1000, 4),
+    spike_state=np.random.randint(2, size=(1000, 3))
+)
+OUTPUT_UIDS = OrderedDict(
+    V=['0', '1', '2', '3'],
+    spike_state=['0', '1', '2']
 )
 
 
@@ -52,7 +48,6 @@ def test_IO_open(mode):
     io.close()
     assert not io.isopen
 
-
 def test_IO_close(mode):
     io = IO('test.h5', base_dir='./')
     assert not io.isopen
@@ -69,7 +64,7 @@ def test_IO_close(mode):
 
 
 def test_Input_init():
-    inp = Input('test_in.h5', data=INPUT_DATA, dt=dt, base_dir='./')
+    inp = Input('test_in.h5', uids=INPUT_UIDS, data=INPUT_DATA, dt=dt, base_dir='./')
     assert inp.vars == ['I', 'g']
     actual_uids = dict(I=['0', '1', '2', '3'], g=['0', '1', '2'])
     for var in ['I', 'g']:
@@ -77,42 +72,42 @@ def test_Input_init():
     assert inp.dt == dt
     with h5py.File(inp.path, 'r') as f:
         print(f['I/data'][()])
-        np.testing.assert_equal(f['I/data'][()], INPUT_DATA['I']['data'])
-        np.testing.assert_equal(f['g/data'][()], INPUT_DATA['g']['data'])
-        np.testing.assert_equal(f['I/uids'][()].astype(str), np.array(INPUT_DATA['I']['uids']).astype(str))
-        np.testing.assert_equal(f['g/uids'][()].astype(str), np.array(INPUT_DATA['g']['uids']).astype(str))
+        np.testing.assert_equal(f['I/data'][()], INPUT_DATA['I'])
+        np.testing.assert_equal(f['g/data'][()], INPUT_DATA['g'])
+        np.testing.assert_equal(f['I/uids'][()].astype(str), np.array(INPUT_UIDS['I']).astype(str))
+        np.testing.assert_equal(f['g/uids'][()].astype(str), np.array(INPUT_UIDS['g']).astype(str))
     os.remove(inp.path)
 
 
 def test_Input_read():
-    inp = Input('test_in.h5', data=INPUT_DATA, dt=dt, base_dir='./')
+    inp = Input('test_in.h5', uids=INPUT_UIDS, data=INPUT_DATA, dt=dt, base_dir='./')
     data = inp.read('0')
     assert 'I' in data and 'g' in data
-    np.testing.assert_equal(data['I']['0'], INPUT_DATA['I']['data'][:, [0]])
+    np.testing.assert_equal(data['I']['0'], INPUT_DATA['I'][:, [0]])
 
     data = inp.read('3')
     assert 'I' in data and 'g' not in data
-    np.testing.assert_equal(data['I']['3'], INPUT_DATA['I']['data'][:, [-1]])
+    np.testing.assert_equal(data['I']['3'], INPUT_DATA['I'][:, [-1]])
 
     data = inp.read(['0', '3'])
     assert 'I' in data and 'g' in data
-    np.testing.assert_equal(data['I']['0'], INPUT_DATA['I']['data'][:, [0]])
-    np.testing.assert_equal(data['I']['3'], INPUT_DATA['I']['data'][:, [-1]])
-    np.testing.assert_equal(data['g']['0'], INPUT_DATA['g']['data'][:, [0]])
+    np.testing.assert_equal(data['I']['0'], INPUT_DATA['I'][:, [0]])
+    np.testing.assert_equal(data['I']['3'], INPUT_DATA['I'][:, [-1]])
+    np.testing.assert_equal(data['g']['0'], INPUT_DATA['g'][:, [0]])
     os.remove(inp.path)
 
 def test_Output_init():
     with h5py.File('test_out.h5', 'w') as f:
-        f.create_dataset('V/uids', data=np.array(OUTPUT_DATA['V']['uids']).astype('S'))
+        f.create_dataset('V/uids', data=np.array(OUTPUT_UIDS['V']).astype('S'))
         f.create_dataset('V/data',
-                         shape=OUTPUT_DATA['V']['data'].shape,
-                         dtype=OUTPUT_DATA['V']['data'].dtype,
-                         data=OUTPUT_DATA['V']['data'])
-        f.create_dataset('spike_state/uids', data=np.array(OUTPUT_DATA['spike_state']['uids']).astype('S'))
+                         shape=OUTPUT_DATA['V'].shape,
+                         dtype=OUTPUT_DATA['V'].dtype,
+                         data=OUTPUT_DATA['V'])
+        f.create_dataset('spike_state/uids', data=np.array(OUTPUT_UIDS['spike_state']).astype('S'))
         f.create_dataset('spike_state/data',
-                         shape=OUTPUT_DATA['spike_state']['data'].shape,
-                         dtype=OUTPUT_DATA['spike_state']['data'].dtype,
-                         data=OUTPUT_DATA['spike_state']['data'])
+                         shape=OUTPUT_DATA['spike_state'].shape,
+                         dtype=OUTPUT_DATA['spike_state'].dtype,
+                         data=OUTPUT_DATA['spike_state'])
         f.create_dataset('metadata', (), 'i')
         f['metadata'].attrs['dt'] = dt
 
@@ -151,16 +146,16 @@ def test_Output_init():
 
 def test_Output_read():
     with h5py.File('test_out.h5', 'w') as f:
-        f.create_dataset('V/uids', data=np.array(OUTPUT_DATA['V']['uids']).astype('S'))
+        f.create_dataset('V/uids', data=np.array(OUTPUT_UIDS['V']).astype('S'))
         f.create_dataset('V/data',
-                         shape=OUTPUT_DATA['V']['data'].shape,
-                         dtype=OUTPUT_DATA['V']['data'].dtype,
-                         data=OUTPUT_DATA['V']['data'])
-        f.create_dataset('spike_state/uids', data=np.array(OUTPUT_DATA['spike_state']['uids']).astype('S'))
+                         shape=OUTPUT_DATA['V'].shape,
+                         dtype=OUTPUT_DATA['V'].dtype,
+                         data=OUTPUT_DATA['V'])
+        f.create_dataset('spike_state/uids', data=np.array(OUTPUT_UIDS['spike_state']).astype('S'))
         f.create_dataset('spike_state/data',
-                         shape=OUTPUT_DATA['spike_state']['data'].shape,
-                         dtype=OUTPUT_DATA['spike_state']['data'].dtype,
-                         data=OUTPUT_DATA['spike_state']['data'])
+                         shape=OUTPUT_DATA['spike_state'].shape,
+                         dtype=OUTPUT_DATA['spike_state'].dtype,
+                         data=OUTPUT_DATA['spike_state'])
         f.create_dataset('metadata', (), 'i')
         f['metadata'].attrs['dt'] = dt
 
@@ -172,24 +167,24 @@ def test_Output_read():
 
     data = out.read('0')
     assert 'V' in data and 'spike_state' in data
-    np.testing.assert_equal(data['V']['0'], OUTPUT_DATA['V']['data'][:, [0]])
-    np.testing.assert_equal(data['spike_state']['0'], OUTPUT_DATA['spike_state']['data'][:, [0]])
+    np.testing.assert_equal(data['V']['0'], OUTPUT_DATA['V'][:, [0]])
+    np.testing.assert_equal(data['spike_state']['0'], OUTPUT_DATA['spike_state'][:, [0]])
 
     data = out.read('0', vars=['V'])
     assert 'V' in data and 'spike_state' not in data
-    np.testing.assert_equal(data['V']['0'], OUTPUT_DATA['V']['data'][:, [0]])
+    np.testing.assert_equal(data['V']['0'], OUTPUT_DATA['V'][:, [0]])
 
     data = out.read('3')
     assert 'V' in data and 'spike_state' not in data
-    np.testing.assert_equal(data['V']['3'], OUTPUT_DATA['V']['data'][:, [-1]])
+    np.testing.assert_equal(data['V']['3'], OUTPUT_DATA['V'][:, [-1]])
 
     data = out.read('3', vars='spike_state')
     assert not data # data should be empty
 
     data = out.read(['0', '3'])
     assert 'V' in data and 'spike_state' in data
-    np.testing.assert_equal(data['V']['0'], OUTPUT_DATA['V']['data'][:, [0]])
-    np.testing.assert_equal(data['V']['3'], OUTPUT_DATA['V']['data'][:, [-1]])
-    np.testing.assert_equal(data['spike_state']['0'], OUTPUT_DATA['spike_state']['data'][:, [0]])
+    np.testing.assert_equal(data['V']['0'], OUTPUT_DATA['V'][:, [0]])
+    np.testing.assert_equal(data['V']['3'], OUTPUT_DATA['V'][:, [-1]])
+    np.testing.assert_equal(data['spike_state']['0'], OUTPUT_DATA['spike_state'][:, [0]])
     out.close()
     os.remove(out.path)
