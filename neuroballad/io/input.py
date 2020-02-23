@@ -1,5 +1,6 @@
 '''Handle input files of NeuroDriver Sessions
 '''
+import logging
 import os
 import time
 import h5py
@@ -13,7 +14,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 
 from .io import IO
-from ..utils import raster, PSTH
+from ..utils import raster, read_ND_spike_state
 
 class Input(IO):
     def __init__(self, filename: str, uids: tp.Dict, data: tp.Dict,
@@ -39,6 +40,7 @@ class Input(IO):
             assert np.isscalar(dt)
             self.dt = dt
         self.t = {v:np.arange(self.shapes[v][0])*dt for v in self.vars}
+
 
         with h5py.File(self.path, 'w') as f:
             for var in self.vars:
@@ -71,11 +73,16 @@ class Input(IO):
         data = {}
         self.open()
         for v in vars:
+            if v == 'spike_state':
+                _ss = read_ND_spike_state(self.file_handle)
             data[v] = {}
             for n in nodes_ids:
                 if n in self.uids[v]:
                     idx = np.where(self.uids[v] == n)[0]
-                    data[v][n] = self.file_handle['{}/data'.format(v)][:, idx]
+                    if v == 'spike_state':
+                        data[v][n] = _ss[n]
+                    else:
+                        data[v][n] = self.file_handle['{}/data'.format(v)][:, idx]
 
         if prune_empty: # keep only data fields that are not empty
             pruned_key = []
@@ -86,8 +93,9 @@ class Input(IO):
                 del data[key]
         return data
 
-    def plot(self, nodes_ids, force_legend=False, cmap=plt.cm.jet,
-             as_heatmap=False, show_ytick=True, fig_filename=None):
+    def plot(self, nodes_ids, force_legend=False,
+             cmap=plt.cm.jet, as_heatmap=False, show_ytick=True,
+             fig_filename=None, figsize=(10,8)):
         '''Plot all input arrays related to a given set of nodes
 
         Parameters
@@ -103,7 +111,7 @@ class Input(IO):
             - True: show yticks in heatmap labeled by node ids. Note that this could result in a lot of yticks
         fig_filename: None or str
             if not `None`, figure will be saved in `self.base_dir` under this name.
-
+ 
         Returns
         --------
         fig: matplotlib.figure.Figure or None
@@ -115,18 +123,15 @@ class Input(IO):
             warn("File stats = {}, session may not have completed running".format(self.status))
             return None, None
 
-        # coerce nodes_ids to be iterable then read data
         nodes_ids = np.atleast_1d(nodes_ids)
         data = self.read(nodes_ids)
-
-        fig, axes = plt.subplots(len(data), 1, figsize=(10,10))
+        fig, axes = plt.subplots(len(data), 1, figsize=figsize)
         if not as_heatmap:
             colors = cmap(np.linspace(0,1,len(nodes_ids)))
             for var_idx, var in enumerate(data.keys()):
                 _ax = axes[var_idx] if len(data) > 1 else axes
                 if var == 'spike_state':
-                    for idx, (node, var_val) in enumerate(data[var].items()):
-                        raster(var_val, ax=_ax, dt=self.dt, offset=idx, length=0.5, color=colors[idx], names=node)
+                    raster(data[var], ax=_ax, colors=cmap)
                 else:
                     for idx, (node, var_val) in enumerate(data[var].items()):
                         _ax.plot(self.t[var], var_val, label=node, color=colors[idx])
@@ -137,28 +142,29 @@ class Input(IO):
             for var_idx, var in enumerate(data.keys()):
                 _ax = axes[var_idx] if len(data) > 1 else axes
                 if var == 'spike_state':
-                    _spikes = np.zeros((len(data[var]), len(self.t[var])))
-                    psth = []
-                    _window = 2e-2
-                    _interval = _window/2
-                    fmt = lambda x, pos: '%.2f' % (float(x)*_interval)
-                    labels = []
-                    for idx, (node, var_val) in enumerate(data[var].items()):
-                        _psth, _psth_t = PSTH(var_val, self.dt, 2e-2, _interval)
-                        labels.append(node)
-                        psth.append(_psth[:,np.newaxis])
-                    psth = np.concatenate(psth, axis=-1)
-                    im = _ax.imshow(psth.transpose(),
-                                    cmap=cmap,
-                                    aspect='auto')
-                    _ax.set_ylim([-0.5, len(data[var])-0.5])
-                    _ax.set_xlim([0, len(_psth_t)])
-                    _ax.xaxis.set_major_formatter(ticker.FuncFormatter(fmt))
-                    _ax.set_yticks(np.arange(len(data[var])))
-                    if show_ytick:
-                        _ax.set_yticklabels(labels)
-                    plt.colorbar(ax=_ax, mappable=im)
-                    _ax.set_title("{} - PSTH".format(self.filename))
+                    raster(data[var], ax=_ax, colors=cmap)
+                    # _spikes = np.zeros((len(data[var]), len(self.t[var])))
+                    # psth = []
+                    # _window = 2e-2
+                    # _interval = _window/2
+                    # fmt = lambda x, pos: '%.2f' % (float(x)*_interval)
+                    # labels = []
+                    # for idx, (node, var_val) in enumerate(data[var].items()):
+                    #     _psth, _psth_t = PSTH(var_val, self.dt, 2e-2, _interval)
+                    #     labels.append(node)
+                    #     psth.append(_psth[:,np.newaxis])
+                    # psth = np.concatenate(psth, axis=-1)
+                    # im = _ax.imshow(psth.transpose(),
+                    #                 cmap=cmap,
+                    #                 aspect='auto')
+                    # _ax.set_ylim([-0.5, len(data[var])-0.5])
+                    # _ax.set_xlim([0, len(_psth_t)])
+                    # _ax.xaxis.set_major_formatter(ticker.FuncFormatter(fmt))
+                    # _ax.set_yticks(np.arange(len(data[var])))
+                    # if show_ytick:
+                    #     _ax.set_yticklabels(labels)
+                    # plt.colorbar(ax=_ax, mappable=im)
+                    # _ax.set_title("{} - PSTH".format(self.filename))
                 else:
                     vals = []
                     labels = []
@@ -178,6 +184,8 @@ class Input(IO):
                         _ax.set_yticklabels(labels)
                     plt.colorbar(ax=_ax, mappable=im)
                     _ax.set_title("{} - {}".format(self.filename, var))
+
         if fig_filename is not None:
-            fig.savefig(self.base_dir / fig_filename)
+            output_figname = os.path.join(self.base_dir, fig_filename)
+            fig.savefig(output_figname, dpi=300)
         return fig, axes

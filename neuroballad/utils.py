@@ -3,13 +3,79 @@
 1. `PSTH`: compute PSTH using spikes in a given window
 2. `raster`: plot spikes of a neuron
 '''
+from warnings import warn
+from collections import OrderedDict
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 matplotlib.use('Agg')
 
-def PSTH(spikes, d_t, window, interval):
+def read_ND_spike_state(file_handle):
+    '''Convert Spike State reading from new neurodriver output
+    '''
+    index=file_handle['spike_state']['data']['index'][:]
+    time=file_handle['spike_state']['data']['time'][:]
+    uids=file_handle['spike_state']['uids'][:]
+    spikes = OrderedDict({uid.decode(): time[index==i] for i, uid in enumerate(uids)})
+    return spikes
+
+def raster(spikes_dict, ax=None, colors=None, force_yticks=False):
+    '''Raster plot
+
+    Paramters
+    ---------
+    spikes_dict:
+        return from `read_ND_spike_state`
+    ax: 
+        matplotlib axis to plot raster into
+    colors: callable
+        used to find color of raster by calling `colors(n)` where `n` is index
+        of neuron in `spikes_dict`,
+    force_yticks: bool
+        - False: yticklabels only reflect neuron ids if 
+
+    Example
+    ---------
+    >>> spikes_dict = read_ND_spike_state(C.output.file_handle)
+    >>> ax = raster(spikes_dict, colors=plt.cm.jet)
+    '''
+    if colors is None:
+        colors = lambda x: 'k'
+    if not callable(colors):
+        warn('provided colors not callable, default to black')
+        colors = lambda x: 'k'
+
+    if ax is None:
+        ax = plt.subplot(111)
+    for n, (_id, _ss) in enumerate(spikes_dict.items()):
+        if len(_ss) > 0:
+            ax.plot(_ss, np.full((len(_ss),), n), '|', c=colors(n))
+
+    names = list(spikes_dict.keys())
+    if force_yticks:
+        ytick_idx = np.arange(len(names))
+    else:
+        if len(names) > 8:
+            ytick_idx = np.floor(np.linspace(0, len(names)-1, 8)).astype(int)
+        else:
+            ytick_idx = np.arange(len(names))
+    ax.set_yticks(ytick_idx)
+    ax.set_yticklabels(np.array(names)[ytick_idx])
+    return ax
+
+def convert_to_legacy_spike_state(spikes_dict, dt, steps):
+    '''Convert New ND Spike State to Old format
+
+    Returns a 2D array (steps, number_of_neurons) of binary values indicating 
+    whether a spike occurs for a given neuron at corresponding index
+    '''
+    ss = np.zeros((steps, len(spikes_dict)), dtype=int)
+    for n, tk in enumerate(spikes_dict.values()):
+        ss[n, tk//dt] = 1
+    return ss
+
+def PSTH_legacy(spikes, d_t, window, interval):
     """
     Compute the peri-stimulus time histogram.
     Arguments:
@@ -43,7 +109,7 @@ def PSTH(spikes, d_t, window, interval):
     return rates, stamps
 
 
-def raster(data, ax=None, color=[(0, 0, 0)], offset=0, length=None, linewidth=0.2, dt=1, names=None):
+def raster_legacy(data, ax=None, color=[(0, 0, 0)], offset=0, length=None, linewidth=0.2, dt=1, names=None):
     '''Create Raster Plot
 
     Paramters
