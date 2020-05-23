@@ -8,7 +8,7 @@ from collections import namedtuple
 import h5py
 import numpy as np
 import networkx as nx
-from neurokernel.tools.logging import setup_logger
+
 from neuroballad.models.element import Element, Input
 from .visualizer import visualize_circuit, visualize_video
 
@@ -451,6 +451,7 @@ class Circuit(object):
         --------
         >>> C.sim(1., 1e-4, InIStep(0, 10., 1., 2.))
         """
+        from neurokernel.tools.logging import setup_logger
         if log is not None:
             screen = False
             file_name = None
