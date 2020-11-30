@@ -1,8 +1,10 @@
-'''Neuroballad Circuit class
+'''Neuroballad Circuit class, which contains the utilities that simplify circuit specification.
 '''
 import copy
 import json
 import time
+import warnings
+import pickle
 from collections import namedtuple
 
 import h5py
@@ -14,6 +16,14 @@ from .visualizer import visualize_circuit, visualize_video
 
 SimConfig = namedtuple('SimConfig',
                        ['dt', 'duration', 'steps', 't', 'device'])
+
+class NeuroballadExecutor(object):
+    def __init__(self, config = {}):
+        self.path = 'neuroballad_execute.py'
+
+def get_neuroballad_path():
+    return os.path.dirname(\
+    os.path.abspath(inspect.getsourcefile(NeuroballadExecutor)))
 
 class Circuit(object):
     """
@@ -41,14 +51,17 @@ class Circuit(object):
                     'rid': 'None',
                     'type': 'neuron'}
 
-    def __init__(self, name='', dtype=np.float64, experiment_name=''):
+    def __init__(self, name='', dtype=np.float64, experiment_name='', config=None):
         self.G = nx.MultiDiGraph()  # Neurokernel graph definition
-        self.config = SimConfig(duration=None, steps=None,
-                                dt=1e-4, t=None, device=0)
+        if config is None:
+            self.config = SimConfig(duration=None, steps=None,
+                                    dt=1e-4, t=None, device=0)
+        else:
+            self.config = config
         self.node_ids = []  # Graph ID's
         self.tracked_variables = []  # Observable variables in circuit
         self._inputs = None  # input nodes
-#        self._outputs = None # output nodes
+        self._outputs = None # output nodes
 #        self.experiment_config = []
         self.experiment_name = experiment_name
         self.dtype = dtype
@@ -318,10 +331,29 @@ class Circuit(object):
                 input_filename='neuroballad_temp_model_input.h5',
                 output_filename='neuroballad_temp_model_output.h5',
                 graph_filename='neuroballand_temp_graph.gexf.gz',
-                device=0, sample_interval=1):
+                device=0, sample_interval=1, execute_in_same_thread=True):
+        """
+        Compiles a neuroballad circuit before execution.
+
+        # Arguments
+            duration (float): Simulation duration.
+            dt (float): Time step size.
+            steps (int): Number of steps to use in simulation. Optional; don't use dt if provided.
+            in_list (list): List of inputs to use during compilation.
+            record (tuple): Tuple of variables to record. Defaults to ('V', 'spike_state', 'I').
+            extra_comps (list): List of new, custom components to include for your simulation.
+            input_filename (str): The .h5 file name to use for the input.
+            output_filename (str): The .h5 file name to use for recording the output.
+            graph_filename (str): Name of the graph file to save the circuit to. Uses the .gexf format.
+            device (int): Device to use for execution.
+            sample_interval (int): Sampling interval for recording simulation output.
+            execute_in_same_thread (bool): Whether to execute the circuit in the current thread.
+        """
         if dt is not None:
             if steps is not None:
-                assert dt*steps == duration, 'dt*step != duration'
+                warnings.warn("Both 'steps' and 'duration' arguments were specified. 'steps' argument is ignored.")
+                steps = int(duration/dt)
+
             else:
                 steps = int(duration/dt)
             t = np.linspace(0, duration, steps)
@@ -336,7 +368,11 @@ class Circuit(object):
                                            dt=dt,
                                            t=t,
                                            device=device)
-        # compile inputs
+
+        run_parameters = [duration, steps]
+        with open('run_parameters.pickle', 'wb') as f:
+            pickle.dump(run_parameters, f, protocol=pickle.HIGHEST_PROTOCOL)
+        # Compile inputs
         if in_list is None:
             in_list = self._inputs
         uids = []
@@ -404,32 +440,37 @@ class Circuit(object):
                                  dtype=self.dtype,
                                  data=Is[i])
 
+        recorders = []
+        for i in record:
+            recorders.append((i,None))
+        with open('record_parameters.pickle', 'wb') as f:
+            pickle.dump(recorders, f, protocol=pickle.HIGHEST_PROTOCOL)
+
         if graph_filename is not None:
             nx.write_gexf(self.G, graph_filename)
 
-        from neurokernel.core_gpu import Manager
-        from neurokernel.LPU.LPU import LPU
-        import neurokernel.mpi_relaunch
-        from neurokernel.LPU.InputProcessors.FileInputProcessor import  \
-            FileInputProcessor
-        from neurokernel.LPU.OutputProcessors.FileOutputProcessor import \
-            FileOutputProcessor
+        if execute_in_same_thread:
+            from neurokernel.core_gpu import Manager
+            from neurokernel.LPU.LPU import LPU
+            import neurokernel.mpi_relaunch
+            from neurokernel.LPU.InputProcessors.FileInputProcessor import  \
+                FileInputProcessor
+            from neurokernel.LPU.OutputProcessors.FileOutputProcessor import \
+                FileOutputProcessor
 
-        input_processor = FileInputProcessor(input_filename)
-        (comp_dict, conns) = LPU.graph_to_dicts(self.G)
-        output_processor = FileOutputProcessor([(i, None) for i in list(record)],
-                                               output_filename,
-                                               sample_interval=sample_interval)
-        self.manager = Manager()
-        self.manager.add(LPU, self.experiment_name, self.config.dt,
-                         comp_dict, conns,
-                         device=self.config.device,
-                         input_processors=[input_processor],
-                         output_processors=[output_processor],
-                         debug=False,
-                         extra_comps=extra_comps if extra_comps is not None else [])
-#        self.input.status = 'pre_run'
-#        self.output.status = 'pre_run'
+            input_processor = FileInputProcessor(input_filename)
+            (comp_dict, conns) = LPU.graph_to_dicts(self.G)
+            output_processor = FileOutputProcessor([(i, None) for i in list(record)],
+                                                output_filename,
+                                                sample_interval=sample_interval)
+            self.manager = Manager()
+            self.manager.add(LPU, self.experiment_name, self.config.dt,
+                            comp_dict, conns,
+                            device=self.config.device,
+                            input_processors=[input_processor],
+                            output_processors=[output_processor],
+                            debug=False,
+                            extra_comps=extra_comps if extra_comps is not None else [])
 
     def sim(self, duration, dt, steps=None, in_list=None,
             record=('V', 'spike_state', 'I'), log=None,
@@ -438,7 +479,7 @@ class Circuit(object):
             output_filename='neuroballad_temp_model_output.h5',
             graph_filename='neuroballand_temp_graph.gexf.gz',
             log_filename='neuroballand_temp_log.log',
-            extra_comps=None, preamble=[], args=[]):
+            extra_comps=None, preamble=[], args=[], execute_in_same_thread=True):
         """
         Simulates the circuit for a set amount of time, with a fixed temporal
         step size and a list of inputs.
@@ -465,10 +506,17 @@ class Circuit(object):
                      in_list=in_list, record=record, extra_comps=extra_comps,
                      input_filename=input_filename, output_filename=output_filename,
                      graph_filename=graph_filename,
-                     device=device, sample_interval=sample_interval)
-        self.manager.spawn()
-        self.manager.start(self.config.steps)
-        self.manager.wait()
+                     device=device, sample_interval=sample_interval, 
+                     execute_in_same_thread=execute_in_same_thread)
+        if execute_in_same_thread:
+            self.manager.spawn()
+            self.manager.start(self.config.steps)
+            self.manager.wait()
+        else:
+            if not os.path.isfile('neuroballad_execute.py'):
+                copyfile(get_neuroballad_path() + '/neuroballad_execute.py',\
+                        'neuroballad_execute.py')
+            subprocess.call(preamble + ['python','neuroballad_execute.py'])
 
     def collect(self):
         data = {'in': {}, 'out': {}}
