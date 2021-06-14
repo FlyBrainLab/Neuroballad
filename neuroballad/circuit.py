@@ -1,11 +1,15 @@
 '''Neuroballad Circuit class, which contains the utilities that simplify circuit specification.
 '''
+import os
 import copy
 import json
 import time
 import warnings
 import pickle
 from collections import namedtuple
+from shutil import copyfile
+import inspect
+import subprocess
 
 import h5py
 import numpy as np
@@ -330,7 +334,7 @@ class Circuit(object):
                 record=('V', 'spike_state', 'I'), extra_comps=None,
                 input_filename='neuroballad_temp_model_input.h5',
                 output_filename='neuroballad_temp_model_output.h5',
-                graph_filename='neuroballand_temp_graph.gexf.gz',
+                graph_filename='neuroballad_temp_graph.gexf.gz',
                 device=0, sample_interval=1, execute_in_same_thread=True):
         """
         Compiles a neuroballad circuit before execution.
@@ -369,7 +373,7 @@ class Circuit(object):
                                            t=t,
                                            device=device)
 
-        run_parameters = [duration, steps]
+        run_parameters = [duration, dt]
         with open('run_parameters.pickle', 'wb') as f:
             pickle.dump(run_parameters, f, protocol=pickle.HIGHEST_PROTOCOL)
         # Compile inputs
@@ -452,7 +456,7 @@ class Circuit(object):
         if execute_in_same_thread:
             from neurokernel.core_gpu import Manager
             from neurokernel.LPU.LPU import LPU
-            import neurokernel.mpi_relaunch
+            # import neurokernel.mpi_relaunch
             from neurokernel.LPU.InputProcessors.FileInputProcessor import  \
                 FileInputProcessor
             from neurokernel.LPU.OutputProcessors.FileOutputProcessor import \
@@ -477,8 +481,8 @@ class Circuit(object):
             device=0, sample_interval=1,
             input_filename='neuroballad_temp_model_input.h5',
             output_filename='neuroballad_temp_model_output.h5',
-            graph_filename='neuroballand_temp_graph.gexf.gz',
-            log_filename='neuroballand_temp_log.log',
+            graph_filename='neuroballad_temp_graph.gexf.gz',
+            log_filename='neuroballad_temp_log.log',
             extra_comps=None, preamble=[], args=[], execute_in_same_thread=True):
         """
         Simulates the circuit for a set amount of time, with a fixed temporal
@@ -530,7 +534,11 @@ class Circuit(object):
         with h5py.File('neuroballad_temp_model_output.h5', 'r') as f:
             for k in f.keys():
                 if k != 'metadata':
-                    data['out'][k] = f[k]['data'][()]
+                    if k == 'spike_state':
+                        print(f[k]['data'].keys())
+                        data['out'][k] = f[k]['data']['time'][()]
+                    else:
+                        data['out'][k] = f[k]['data'][()]
                     uids['out'][k] = f[k]['uids'][()].astype(str)
         return uids, data
 

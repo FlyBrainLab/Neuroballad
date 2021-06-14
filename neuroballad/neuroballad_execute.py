@@ -16,7 +16,7 @@ from neurokernel.LPU.LPU import LPU
 
 
 
-(comp_dict, conns) = LPU.lpu_parser('neuroballad_temp_model.gexf.gz')
+(comp_dict, conns) = LPU.lpu_parser('neuroballad_temp_graph.gexf.gz')
 with open('run_parameters.pickle', 'rb') as f:
     run_parameters = pickle.load(f)
 with open('record_parameters.pickle', 'rb') as f:
